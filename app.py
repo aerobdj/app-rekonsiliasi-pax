@@ -64,7 +64,11 @@ st.markdown("""
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
     section[data-testid="stSidebar"] > div:first-child {
-        padding-top: 1.5rem;
+        padding-top: 0.5rem !important;
+        padding-bottom: 0rem !important;
+    }
+    div[data-testid="stSidebarUserContent"] {
+        padding-top: 0rem !important;
     }
     </style>
 """, unsafe_allow_html=True)
