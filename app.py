@@ -8,8 +8,7 @@ import io
 # -----------------------------------------------------------------------------
 # 1. KONFIGURASI HALAMAN & BRANDING INJOURNEY
 # -----------------------------------------------------------------------------
-LOGO_WHITE = "https://www.injourneyairports.id/assets/injourney-logo-white-Dl4T6LNj.png" # Mode Gelap
-LOGO_GREY = "https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png"   # Mode Terang
+LOGO_WHITE = "https://www.injourneyairports.id/assets/injourney-logo-white-Dl4T6LNj.png"
 KAWUNG_ICON = "https://www.injourneyairports.id/assets/kawung-logo-side-CktPU2GK.png"
 
 st.set_page_config(
@@ -19,25 +18,41 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS untuk Posisi Logo & Layout
+# Custom CSS untuk Posisi Logo Center-Top & Tombol Collapse Pojok Kanan Sidebar
 st.markdown("""
     <style>
-    /* MEMOTONG RUANG KOSONG ATAS SIDEBAR AGAR LOGO NAIK KE PALING ATAS */
+    /* PADDING AWAL SIDEBAR */
     section[data-testid="stSidebar"] > div:first-child {
-        padding-top: 0.8rem !important;
-    }
-    div[data-testid="stSidebarUserContent"] {
-        padding-top: 0rem !important;
+        padding-top: 0.5rem !important;
     }
 
-    /* CONTAINER LOGO CUSTOM DI SIDEBAR (CENTER & BEBAS UKURAN) */
-    .sidebar-logo-container {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        padding-top: 0px;
-        margin-top: -10px;
-        margin-bottom: 10px;
+    /* MENENGAHKAN LOGO DI PALING ATAS (CENTER-TOP) */
+    [data-testid="stSidebarHeader"] {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        padding-top: 1.2rem !important;
+        padding-bottom: 0.5rem !important;
+        width: 100% !important;
+    }
+    
+    /* UKURAN LOGO MEMBESAR GAGAH */
+    [data-testid="stSidebarHeader"] img {
+        max-height: 65px !important;
+        width: auto !important;
+        margin: 0 auto !important;
+    }
+
+    /* MEMINDAHKAN TOMBOL HIDE SIDEBAR (<<) KE POJOK KANAN DILUAR ALUR LOGO */
+    [data-testid="stSidebarCollapseButton"] {
+        position: absolute !important;
+        right: 8px !important;
+        top: 8px !important;
+        opacity: 0.7;
+        transition: opacity 0.2s ease;
+    }
+    [data-testid="stSidebarCollapseButton"]:hover {
+        opacity: 1.0;
     }
 
     .main-header {
@@ -86,6 +101,13 @@ st.markdown("""
 
 if "history" not in st.session_state:
     st.session_state["history"] = []
+
+# Menggunakan fitur resmi st.logo yang sekarang sudah diatur CSS-nya menjadi Center-Top
+st.logo(
+    image=LOGO_WHITE,
+    icon_image=KAWUNG_ICON,
+    size="large"
+)
 
 # -----------------------------------------------------------------------------
 # 2. HELPER PARSER (PDF MANIFEST & MULTI-FORMAT TAPPING)
@@ -237,16 +259,10 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
     return df_res
 
 # -----------------------------------------------------------------------------
-# 4. TAMPILAN SIDEBAR (LOGOS BESAR, BEBAS DARI HIDE-SIDEBAR LOCK)
+# 4. TAMPILAN SIDEBAR
 # -----------------------------------------------------------------------------
 
 with st.sidebar:
-    # MENAMPILKAN LOGO BEBAS TANPA KUNCIAN ST.LOGO
-    st.markdown('<div class="sidebar-logo-container">', unsafe_allow_html=True)
-    st.image(LOGO_WHITE, width=180) # LEBAR 180px: JELAS, BESAR & PROPORSIONAL
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.divider()
     menu = st.radio("Pilihan Menu:", ["📊 Rekonsiliasi Data", "📜 Histori Log"])
     st.divider()
 
