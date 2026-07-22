@@ -8,7 +8,9 @@ import io
 # -----------------------------------------------------------------------------
 # 1. KONFIGURASI HALAMAN & BRANDING INJOURNEY
 # -----------------------------------------------------------------------------
-LOGO_URL = "https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png"
+# Logo versi Light/White (sangat cocok & kontras untuk Dark Mode)
+LOGO_URL = "https://www.injourneyairports.id/assets/injourney-logo-white-C4q4Tf2U.png" 
+LOGO_GREY = "https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png"
 KAWUNG_ICON = "https://www.injourneyairports.id/assets/kawung-logo-side-CktPU2GK.png"
 
 st.set_page_config(
@@ -18,21 +20,30 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS untuk Posisi Logo Sejajar Tombol Hide Sidebar
+# Custom CSS untuk Posisi Logo Center & Ukuran Pas
 st.markdown("""
     <style>
-    /* MEMANGKAS RUANG KOSONG UTAMA SIDEBAR */
+    /* MEMBERSIHKAN PADDING ATAS SIDEBAR */
     section[data-testid="stSidebar"] > div:first-child {
         padding-top: 0.8rem !important;
     }
     div[data-testid="stSidebarUserContent"] {
         padding-top: 0rem !important;
     }
-    
-    /* MENYEJAJARKAN HEADER SIDEBAR DENGAN TOMBOL COLLAPSE */
-    div[data-testid="stSidebarHeader"] {
+
+    /* POSISI LOGO CENTER DI HEADER SIDEBAR */
+    [data-testid="stSidebarHeader"] {
         padding-top: 0.5rem !important;
         padding-bottom: 0.5rem !important;
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+    }
+    
+    [data-testid="stSidebarHeader"] img {
+        max-height: 40px !important; /* Ukuran proporsional */
+        width: auto !important;
+        margin: 0 auto !important;
     }
 
     .main-header {
@@ -40,7 +51,7 @@ st.markdown("""
         align-items: center;
         justify-content: space-between;
         padding-bottom: 15px;
-        border-bottom: 2px solid #e2e8f0;
+        border-bottom: 2px solid #334155;
         margin-bottom: 20px;
     }
     .main-title {
@@ -83,7 +94,7 @@ st.markdown("""
 if "history" not in st.session_state:
     st.session_state["history"] = []
 
-# Fitur Resmi Streamlit untuk Menempelkan Logo Sejajar Tombol Hide Sidebar
+# Menampilkan logo terang yang kontras di mode gelap pada header sidebar
 st.logo(
     image=LOGO_URL,
     icon_image=KAWUNG_ICON,
