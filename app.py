@@ -38,7 +38,7 @@ st.markdown("""
     }
     
     [data-testid="stSidebarHeader"] img {
-        max-height: 38px !important;
+        max-height: 100px !important;
         width: auto !important;
     }
 
