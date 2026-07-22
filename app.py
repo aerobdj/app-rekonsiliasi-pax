@@ -18,16 +18,21 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS
+# Custom CSS untuk Posisi Logo Sejajar Tombol Hide Sidebar
 st.markdown("""
     <style>
-    /* MENGGESER LOGO & ISI SIDEBAR KE PALING ATAS */
+    /* MEMANGKAS RUANG KOSONG UTAMA SIDEBAR */
     section[data-testid="stSidebar"] > div:first-child {
-        padding-top: 0.5rem !important;
-        padding-bottom: 0rem !important;
+        padding-top: 0.8rem !important;
     }
     div[data-testid="stSidebarUserContent"] {
         padding-top: 0rem !important;
+    }
+    
+    /* MENYEJAJARKAN HEADER SIDEBAR DENGAN TOMBOL COLLAPSE */
+    div[data-testid="stSidebarHeader"] {
+        padding-top: 0.5rem !important;
+        padding-bottom: 0.5rem !important;
     }
 
     .main-header {
@@ -77,6 +82,13 @@ st.markdown("""
 
 if "history" not in st.session_state:
     st.session_state["history"] = []
+
+# Fitur Resmi Streamlit untuk Menempelkan Logo Sejajar Tombol Hide Sidebar
+st.logo(
+    image=LOGO_URL,
+    icon_image=KAWUNG_ICON,
+    size="large"
+)
 
 # -----------------------------------------------------------------------------
 # 2. HELPER PARSER (PDF MANIFEST & MULTI-FORMAT TAPPING)
@@ -228,17 +240,10 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
     return df_res
 
 # -----------------------------------------------------------------------------
-# 4. TAMPILAN SIDEBAR (PADAT & MEPET ATAS)
+# 4. TAMPILAN SIDEBAR
 # -----------------------------------------------------------------------------
 
 with st.sidebar:
-    sb_col1, sb_col2, sb_col3 = st.columns([1, 2, 1])
-    with sb_col2:
-        st.image(LOGO_URL, width=110)
-        
-    st.markdown("<p style='text-align: center; font-weight: 600; color: #94a3b8; margin-top: -12px; margin-bottom: -5px; font-size: 12px;'>Pax Reconciliation</p>", unsafe_allow_html=True)
-    st.divider()
-    
     menu = st.radio("Pilihan Menu:", ["📊 Rekonsiliasi Data", "📜 Histori Log"])
     st.divider()
 
