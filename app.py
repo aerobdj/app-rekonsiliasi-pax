@@ -146,13 +146,46 @@ def parse_manifest_pdf(pdf_file, airline):
     return pd.DataFrame(manifest_data)
 
 def load_tapping_file(uploaded_file):
-    """Membaca file Tapping dalam format CSV, XLSX, XLS, atau TXT."""
+    """Membaca file Tapping (CSV, XLSX, XLS fake-Excel/TXT) dengan fallback parser."""
     filename = uploaded_file.name.lower()
+    df = None
+    
     try:
-        if filename.endswith(".csv"):
+        # 1. Jika ekstensi XLSX
+        if filename.endswith(".xlsx"):
+            df = pd.read_excel(uploaded_file, engine="openpyxl")
+            
+        # 2. Jika ekstensi XLS (Coba Excel asli, jika gagal coba baca sebagai CSV/TSV/TXT/HTML)
+        elif filename.endswith(".xls"):
+            try:
+                # Coba baca sebagai Excel biner
+                df = pd.read_excel(uploaded_file)
+            except Exception:
+                uploaded_file.seek(0)
+                try:
+                    # Fallback 1: Coba baca sebagai Tab-separated / CSV
+                    df = pd.read_csv(uploaded_file, sep="\t")
+                    if len(df.columns) <= 1:
+                        uploaded_file.seek(0)
+                        df = pd.read_csv(uploaded_file, sep=",")
+                    if len(df.columns) <= 1:
+                        uploaded_file.seek(0)
+                        df = pd.read_csv(uploaded_file, sep=";")
+                except Exception:
+                    uploaded_file.seek(0)
+                    # Fallback 2: Coba baca sebagai HTML table berkedok .xls
+                    tables = pd.read_html(uploaded_file)
+                    if tables:
+                        df = tables[0]
+                        
+        # 3. Jika ekstensi CSV
+        elif filename.endswith(".csv"):
             df = pd.read_csv(uploaded_file)
-        elif filename.endswith((".xlsx", ".xls")):
-            df = pd.read_excel(uploaded_file)
+            if len(df.columns) <= 1:
+                uploaded_file.seek(0)
+                df = pd.read_csv(uploaded_file, sep=";")
+                
+        # 4. Jika ekstensi TXT
         elif filename.endswith(".txt"):
             df = pd.read_csv(uploaded_file, sep="\t")
             if len(df.columns) <= 1:
@@ -161,15 +194,18 @@ def load_tapping_file(uploaded_file):
             if len(df.columns) <= 1:
                 uploaded_file.seek(0)
                 df = pd.read_csv(uploaded_file, sep=";")
-        else:
-            st.error("Format file tapping tidak didukung!")
-            return None
+
     except Exception as e:
-        st.error(f"Gagal membaca file tapping ({filename}): {e}")
-        return None
+        st.error(f"Gagal membaca file tapping ({uploaded_file.name}): {e}")
+        return pd.DataFrame() # Kembalikan DataFrame kosong agar tidak AttributeError
     
-    df.columns = [str(col).strip().upper() for col in df.columns]
-    return df
+    if df is not None and not df.empty:
+        # Standarisasi nama kolom ke huruf kapital
+        df.columns = [str(col).strip().upper() for col in df.columns]
+        return df
+    else:
+        st.error(f"File {uploaded_file.name} kosong atau format isi tidak terbaca!")
+        return pd.DataFrame()
 
 # -----------------------------------------------------------------------------
 # 3. ENGINE MATCHING
