@@ -18,7 +18,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS untuk tampilan Korporat & Elegan
+# Custom CSS
 st.markdown("""
     <style>
     .main-header {
@@ -30,23 +30,23 @@ st.markdown("""
         margin-bottom: 25px;
     }
     .main-title {
-        color: #0f172a;
+        color: #f8fafc;
         font-family: 'Segoe UI', sans-serif;
         font-weight: 700;
         font-size: 26px;
         margin: 0;
     }
     .sub-title {
-        color: #64748b;
+        color: #94a3b8;
         font-size: 14px;
         margin-top: 4px;
     }
     div[data-testid="stMetric"] {
-        background-color: #f8fafc;
-        border: 1px solid #e2e8f0;
+        background-color: #1e293b;
+        border: 1px solid #334155;
         border-radius: 10px;
         padding: 15px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     }
     div.stButton > button:first-child {
         background-color: #0284c7;
@@ -63,6 +63,9 @@ st.markdown("""
         border: none;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
+    section[data-testid="stSidebar"] > div:first-child {
+        padding-top: 1.5rem;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -70,7 +73,7 @@ if "history" not in st.session_state:
     st.session_state["history"] = []
 
 # -----------------------------------------------------------------------------
-# 2. HELPER PARSER (PDF MANIFEST & TXT TAPPING)
+# 2. HELPER PARSER (PDF MANIFEST & MULTI-FORMAT TAPPING)
 # -----------------------------------------------------------------------------
 
 def parse_manifest_pdf(pdf_file, airline):
@@ -105,22 +108,29 @@ def parse_manifest_pdf(pdf_file, airline):
                         
     return pd.DataFrame(manifest_data)
 
-def load_tapping_txt(uploaded_file):
-    """Khusus membaca file Tapping berformat TXT (Tab, Comma, atau Semicolon Separated)."""
+def load_tapping_file(uploaded_file):
+    """Membaca file Tapping dalam format CSV, XLSX, XLS, atau TXT."""
+    filename = uploaded_file.name.lower()
     try:
-        # Coba baca dengan delimiter tab terlebih dahulu (paling umum di log TXT)
-        df = pd.read_csv(uploaded_file, sep="\t")
-        if len(df.columns) <= 1:
-            uploaded_file.seek(0)
-            df = pd.read_csv(uploaded_file, sep=",")
-        if len(df.columns) <= 1:
-            uploaded_file.seek(0)
-            df = pd.read_csv(uploaded_file, sep=";")
+        if filename.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
+        elif filename.endswith((".xlsx", ".xls")):
+            df = pd.read_excel(uploaded_file)
+        elif filename.endswith(".txt"):
+            df = pd.read_csv(uploaded_file, sep="\t")
+            if len(df.columns) <= 1:
+                uploaded_file.seek(0)
+                df = pd.read_csv(uploaded_file, sep=",")
+            if len(df.columns) <= 1:
+                uploaded_file.seek(0)
+                df = pd.read_csv(uploaded_file, sep=";")
+        else:
+            st.error("Format file tapping tidak didukung!")
+            return None
     except Exception as e:
-        st.error(f"Gagal membaca file TXT: {e}")
+        st.error(f"Gagal membaca file tapping ({filename}): {e}")
         return None
     
-    # Standarisasi nama kolom ke huruf kapital
     df.columns = [str(col).strip().upper() for col in df.columns]
     return df
 
@@ -216,12 +226,11 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
 # -----------------------------------------------------------------------------
 
 with st.sidebar:
-    # Memperkecil logo dengan meletakkannya di tengah dan mengatur lebar gambar
-    col_sb1, col_sb2, col_sb3 = st.columns([1, 2, 1])
-    with col_sb2:
+    sb_col1, sb_col2, sb_col3 = st.columns([1, 2, 1])
+    with sb_col2:
         st.image(LOGO_URL, width=120)
-    
-    st.markdown("<p style='text-align: center; font-weight: 600; color: #94a3b8; margin-top: -10px; margin-bottom: 10px;'>Pax Reconciliation</p>", unsafe_allow_html=True)
+        
+    st.markdown("<p style='text-align: center; font-weight: 600; color: #94a3b8; margin-top: -10px; margin-bottom: 5px; font-size: 13px;'>Pax Reconciliation</p>", unsafe_allow_html=True)
     st.divider()
     
     menu = st.radio("Pilihan Menu:", ["📊 Rekonsiliasi Data", "📜 Histori Log"])
@@ -240,13 +249,15 @@ if menu == "📊 Rekonsiliasi Data":
         
         st.subheader("2. Upload Dokumen")
         
-        # HANYA MENERIMA FILE TXT UNTUK TAPPING
+        # MENERIMA FORMAT TXT, CSV, XLSX, XLS DENGAN JELAS
+        allowed_types = ["txt", "csv", "xlsx", "xls"]
+        
         if flight_mode == "Single Flight":
-            file_tapping1 = st.file_uploader("Upload File Tapping (.TXT):", type=["txt"])
+            file_tapping1 = st.file_uploader("Upload File Tapping (TXT/CSV/XLSX):", type=allowed_types)
             file_tapping2 = None
         else:
-            file_tapping1 = st.file_uploader("Upload Tapping Flight 1 (.TXT):", type=["txt"], key="t1")
-            file_tapping2 = st.file_uploader("Upload Tapping Flight 2 (.TXT):", type=["txt"], key="t2")
+            file_tapping1 = st.file_uploader("Upload Tapping Flight 1:", type=allowed_types, key="t1")
+            file_tapping2 = st.file_uploader("Upload Tapping Flight 2:", type=allowed_types, key="t2")
             
         file_manifest = st.file_uploader("Upload Manifest PDF/TXT:", type=["pdf", "txt"])
         
@@ -268,16 +279,16 @@ if menu == "📊 Rekonsiliasi Data":
             </div>
         """, unsafe_allow_html=True)
     with col_head2:
-        st.image(LOGO_URL, width=220)
+        st.image(LOGO_URL, width=200)
 
     if btn_proses:
         if not file_manifest or not file_tapping1 or (flight_mode == "Combine Flight" and not file_tapping2):
             st.error("⚠️ Mohon lengkapi semua file upload di sidebar sebelum memproses!")
         else:
             with st.spinner("⏳ Memproses ekstraksi data & mencocokkan kriteria..."):
-                df_tap1 = load_tapping_txt(file_tapping1)
+                df_tap1 = load_tapping_file(file_tapping1)
                 if flight_mode == "Combine Flight":
-                    df_tap2 = load_tapping_txt(file_tapping2)
+                    df_tap2 = load_tapping_file(file_tapping2)
                     df_tapping = pd.concat([df_tap1, df_tap2], ignore_index=True)
                 else:
                     df_tapping = df_tap1
@@ -305,20 +316,21 @@ if menu == "📊 Rekonsiliasi Data":
             
             st.dataframe(df_result, use_container_width=True, height=450)
             
-            # Export hasil akhir tetap bisa diunduh sebagai Excel/CSV untuk pelaporan
+            # Export ke Excel
             output = io.BytesIO()
-            df_result.to_csv(output, index=False)
+            with pd.ExcelWriter(output, engine="openpyxl") as writer:
+                df_result.to_excel(writer, index=False, sheet_name="Rekonsiliasi")
             
             st.download_button(
-                label="📥 Download Laporan Hasil (.CSV)",
+                label="📥 Download Laporan Hasil (.XLSX)",
                 data=output.getvalue(),
-                file_name=f"InJourney_Rekonsiliasi_{airline.split()[0]}.csv",
-                mime="text/csv",
+                file_name=f"InJourney_Rekonsiliasi_{airline.split()[0]}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=True
             )
             
     else:
-        st.info("👈 Silakan atur maskapai, mode penerbangan, dan upload dokumen TXT pada **Sidebar sebelah kiri**, lalu klik **MULAI REKONSILIASI**.")
+        st.info("👈 Silakan atur maskapai, mode penerbangan, dan upload dokumen pada **Sidebar sebelah kiri**, lalu klik **MULAI REKONSILIASI**.")
 
 elif menu == "📜 Histori Log":
     st.title("📜 Histori Log Rekonsiliasi")
