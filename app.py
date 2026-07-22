@@ -8,7 +8,6 @@ import io
 # -----------------------------------------------------------------------------
 # 1. KONFIGURASI HALAMAN & BRANDING INJOURNEY
 # -----------------------------------------------------------------------------
-# Asset Logo Resmi InJourney
 LOGO_WHITE = "https://www.injourneyairports.id/assets/injourney-logo-white-Dl4T6LNj.png" # Mode Gelap
 LOGO_GREY = "https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png"   # Mode Terang
 KAWUNG_ICON = "https://www.injourneyairports.id/assets/kawung-logo-side-CktPU2GK.png"
@@ -23,23 +22,22 @@ st.set_page_config(
 # Custom CSS untuk Posisi Logo & Layout
 st.markdown("""
     <style>
-    /* PADDING SIDEBAR */
+    /* MEMOTONG RUANG KOSONG ATAS SIDEBAR AGAR LOGO NAIK KE PALING ATAS */
     section[data-testid="stSidebar"] > div:first-child {
-        padding-top: 1rem !important;
+        padding-top: 0.8rem !important;
+    }
+    div[data-testid="stSidebarUserContent"] {
+        padding-top: 0rem !important;
     }
 
-    /* KONTROL UKURAN DAN POSISI LOGO DUAL-MODE DARI STREAMLIT LOGO */
-    [data-testid="stSidebarHeader"] {
-        padding-top: 1rem !important;
-        padding-bottom: 1rem !important;
-        display: flex !important;
-        justify-content: center !important;
-        align-items: center !important;
-    }
-    
-    [data-testid="stSidebarHeader"] img {
-        max-height: 100px !important;
-        width: auto !important;
+    /* CONTAINER LOGO CUSTOM DI SIDEBAR (CENTER & BEBAS UKURAN) */
+    .sidebar-logo-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding-top: 0px;
+        margin-top: -10px;
+        margin-bottom: 10px;
     }
 
     .main-header {
@@ -88,13 +86,6 @@ st.markdown("""
 
 if "history" not in st.session_state:
     st.session_state["history"] = []
-
-# DUAL-MODE LOGO: Otomatis ganti logo saat user ubah Dark/Light Theme di setting browser/Streamlit
-st.logo(
-    image=LOGO_WHITE,       # Logo Tampil di Dark Mode
-    icon_image=KAWUNG_ICON,
-    size="large"
-)
 
 # -----------------------------------------------------------------------------
 # 2. HELPER PARSER (PDF MANIFEST & MULTI-FORMAT TAPPING)
@@ -246,10 +237,16 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
     return df_res
 
 # -----------------------------------------------------------------------------
-# 4. TAMPILAN SIDEBAR
+# 4. TAMPILAN SIDEBAR (LOGOS BESAR, BEBAS DARI HIDE-SIDEBAR LOCK)
 # -----------------------------------------------------------------------------
 
 with st.sidebar:
+    # MENAMPILKAN LOGO BEBAS TANPA KUNCIAN ST.LOGO
+    st.markdown('<div class="sidebar-logo-container">', unsafe_allow_html=True)
+    st.image(LOGO_WHITE, width=180) # LEBAR 180px: JELAS, BESAR & PROPORSIONAL
+    st.markdown('</div>', unsafe_allow_html=True)
+    
+    st.divider()
     menu = st.radio("Pilihan Menu:", ["📊 Rekonsiliasi Data", "📜 Histori Log"])
     st.divider()
 
@@ -294,7 +291,6 @@ if menu == "📊 Rekonsiliasi Data":
             </div>
         """, unsafe_allow_html=True)
     with col_head2:
-        # Menampilkan Logo Utama sesuai URL Baru
         st.image(LOGO_WHITE, width=200)
 
     if btn_proses:
