@@ -104,7 +104,7 @@ if "history" not in st.session_state:
 
 # Menggunakan fitur resmi st.logo yang sekarang sudah diatur CSS-nya menjadi Center-Top
 st.logo(
-    image=LOGO_WHITE,
+    image=KAWUNG_ICON,
     icon_image=KAWUNG_ICON,
     size="large"
 )
