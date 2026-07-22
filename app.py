@@ -8,9 +8,9 @@ import io
 # -----------------------------------------------------------------------------
 # 1. KONFIGURASI HALAMAN & BRANDING INJOURNEY
 # -----------------------------------------------------------------------------
-# Logo versi Light/White (sangat cocok & kontras untuk Dark Mode)
-LOGO_URL = "https://www.injourneyairports.id/assets/injourney-logo-white-C4q4Tf2U.png" 
-LOGO_GREY = "https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png"
+# Asset Logo Resmi InJourney
+LOGO_WHITE = "https://www.injourneyairports.id/assets/injourney-logo-white-Dl4T6LNj.png" # Mode Gelap
+LOGO_GREY = "https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png"   # Mode Terang
 KAWUNG_ICON = "https://www.injourneyairports.id/assets/kawung-logo-side-CktPU2GK.png"
 
 st.set_page_config(
@@ -20,18 +20,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS untuk Posisi Logo Center & Ukuran Pas
+# Custom CSS untuk Posisi Logo & Layout
 st.markdown("""
     <style>
-    /* MEMBERSIHKAN PADDING ATAS SIDEBAR */
+    /* PADDING SIDEBAR */
     section[data-testid="stSidebar"] > div:first-child {
-        padding-top: 0.8rem !important;
-    }
-    div[data-testid="stSidebarUserContent"] {
-        padding-top: 0rem !important;
+        padding-top: 1rem !important;
     }
 
-    /* POSISI LOGO CENTER DI HEADER SIDEBAR */
+    /* KONTROL UKURAN DAN POSISI LOGO DUAL-MODE DARI STREAMLIT LOGO */
     [data-testid="stSidebarHeader"] {
         padding-top: 0.5rem !important;
         padding-bottom: 0.5rem !important;
@@ -41,9 +38,8 @@ st.markdown("""
     }
     
     [data-testid="stSidebarHeader"] img {
-        max-height: 40px !important; /* Ukuran proporsional */
+        max-height: 38px !important;
         width: auto !important;
-        margin: 0 auto !important;
     }
 
     .main-header {
@@ -55,7 +51,6 @@ st.markdown("""
         margin-bottom: 20px;
     }
     .main-title {
-        color: #f8fafc;
         font-family: 'Segoe UI', sans-serif;
         font-weight: 700;
         font-size: 26px;
@@ -67,11 +62,11 @@ st.markdown("""
         margin-top: 4px;
     }
     div[data-testid="stMetric"] {
-        background-color: #1e293b;
+        background-color: rgba(30, 41, 59, 0.5);
         border: 1px solid #334155;
         border-radius: 10px;
         padding: 15px;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
     div.stButton > button:first-child {
         background-color: #0284c7;
@@ -94,9 +89,9 @@ st.markdown("""
 if "history" not in st.session_state:
     st.session_state["history"] = []
 
-# Menampilkan logo terang yang kontras di mode gelap pada header sidebar
+# DUAL-MODE LOGO: Otomatis ganti logo saat user ubah Dark/Light Theme di setting browser/Streamlit
 st.logo(
-    image=LOGO_URL,
+    image=LOGO_WHITE,       # Logo Tampil di Dark Mode
     icon_image=KAWUNG_ICON,
     size="large"
 )
@@ -299,7 +294,8 @@ if menu == "📊 Rekonsiliasi Data":
             </div>
         """, unsafe_allow_html=True)
     with col_head2:
-        st.image(LOGO_URL, width=200)
+        # Menampilkan Logo Utama sesuai URL Baru
+        st.image(LOGO_WHITE, width=200)
 
     if btn_proses:
         if not file_manifest or not file_tapping1 or (flight_mode == "Combine Flight" and not file_tapping2):
