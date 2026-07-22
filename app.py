@@ -146,65 +146,54 @@ def parse_manifest_pdf(pdf_file, airline):
     return pd.DataFrame(manifest_data)
 
 def load_tapping_file(uploaded_file):
-    """Membaca file Tapping (CSV, XLSX, XLS fake-Excel/TXT) dengan fallback parser."""
+    """Membaca file Tapping dengan penanganan encodings & fallback delimiters."""
+    if uploaded_file is None:
+        return pd.DataFrame()
+
     filename = uploaded_file.name.lower()
     df = None
     
-    try:
-        # 1. Jika ekstensi XLSX
-        if filename.endswith(".xlsx"):
-            df = pd.read_excel(uploaded_file, engine="openpyxl")
-            
-        # 2. Jika ekstensi XLS (Coba Excel asli, jika gagal coba baca sebagai CSV/TSV/TXT/HTML)
-        elif filename.endswith(".xls"):
-            try:
-                # Coba baca sebagai Excel biner
-                df = pd.read_excel(uploaded_file)
-            except Exception:
-                uploaded_file.seek(0)
-                try:
-                    # Fallback 1: Coba baca sebagai Tab-separated / CSV
-                    df = pd.read_csv(uploaded_file, sep="\t")
-                    if len(df.columns) <= 1:
-                        uploaded_file.seek(0)
-                        df = pd.read_csv(uploaded_file, sep=",")
-                    if len(df.columns) <= 1:
-                        uploaded_file.seek(0)
-                        df = pd.read_csv(uploaded_file, sep=";")
-                except Exception:
-                    uploaded_file.seek(0)
-                    # Fallback 2: Coba baca sebagai HTML table berkedok .xls
-                    tables = pd.read_html(uploaded_file)
-                    if tables:
-                        df = tables[0]
-                        
-        # 3. Jika ekstensi CSV
-        elif filename.endswith(".csv"):
-            df = pd.read_csv(uploaded_file)
-            if len(df.columns) <= 1:
-                uploaded_file.seek(0)
-                df = pd.read_csv(uploaded_file, sep=";")
-                
-        # 4. Jika ekstensi TXT
-        elif filename.endswith(".txt"):
-            df = pd.read_csv(uploaded_file, sep="\t")
-            if len(df.columns) <= 1:
-                uploaded_file.seek(0)
-                df = pd.read_csv(uploaded_file, sep=",")
-            if len(df.columns) <= 1:
-                uploaded_file.seek(0)
-                df = pd.read_csv(uploaded_file, sep=";")
+    # Kumpulan encoding yang umum dipakai ekspor laporan sistem maskapai
+    encodings = ["utf-8", "latin1", "iso-8859-1", "cp1252", "utf-16"]
 
-    except Exception as e:
-        st.error(f"Gagal membaca file tapping ({uploaded_file.name}): {e}")
-        return pd.DataFrame() # Kembalikan DataFrame kosong agar tidak AttributeError
-    
+    # 1. Coba baca sebagai Excel resmi terlebih dahulu
+    if filename.endswith((".xlsx", ".xls")):
+        try:
+            df = pd.read_excel(uploaded_file)
+        except Exception:
+            df = None
+
+    # 2. Jika gagal atau format TXT/CSV/XLS rakitan, coba parser file teks dengan berbagai delimiter & encoding
+    if df is None or df.empty:
+        for enc in encodings:
+            for sep in ["\t", ",", ";", "|"]:
+                try:
+                    uploaded_file.seek(0)
+                    temp_df = pd.read_csv(uploaded_file, sep=sep, encoding=enc, on_bad_lines="skip")
+                    if temp_df is not None and len(temp_df.columns) > 1 and len(temp_df) > 0:
+                        df = temp_df
+                        break
+                except Exception:
+                    continue
+            if df is not None and not df.empty:
+                break
+
+    # 3. Fallback terakhir: Coba baca sebagai HTML table
+    if df is None or df.empty:
+        try:
+            uploaded_file.seek(0)
+            tables = pd.read_html(uploaded_file)
+            if tables:
+                df = tables[0]
+        except Exception:
+            pass
+
+    # Validasi Hasil Akhir
     if df is not None and not df.empty:
-        # Standarisasi nama kolom ke huruf kapital
         df.columns = [str(col).strip().upper() for col in df.columns]
         return df
     else:
-        st.error(f"File {uploaded_file.name} kosong atau format isi tidak terbaca!")
+        st.error(f"⚠️ File **{uploaded_file.name}** tidak terbaca atau kosong. Pastikan file tidak rusak/kosong.")
         return pd.DataFrame()
 
 # -----------------------------------------------------------------------------
@@ -212,6 +201,15 @@ def load_tapping_file(uploaded_file):
 # -----------------------------------------------------------------------------
 
 def reconcile_engine(df_tapping, df_manifest, airline_name):
+    # Proteksi: Jika salah satu data kosong, langsung kembalikan DataFrame dengan struktur kolom lengkap
+    empty_columns = [
+        "Nama Tapping", "Seat Tapping", "PNR Tapping", "Type Pax", 
+        "Seat Manifest", "PNR Manifest", "Status", "Catatan"
+    ]
+    
+    if df_tapping.empty or df_manifest.empty:
+        return pd.DataFrame(columns=empty_columns)
+
     results = []
     has_manifest_pnr = not df_manifest["pnr_manifest"].str.contains("NO_PNR").all()
     
@@ -272,9 +270,9 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
             "Catatan": catatan
         })
         
-    df_res = pd.DataFrame(results)
+    df_res = pd.DataFrame(results) if results else pd.DataFrame(columns=empty_columns)
     
-    scanned_manifest_seats = df_res["Seat Manifest"].tolist()
+    scanned_manifest_seats = df_res["Seat Manifest"].tolist() if "Seat Manifest" in df_res.columns else []
     no_show_list = []
     for idx, mnf in df_manifest.iterrows():
         if mnf["seat_manifest"] not in scanned_manifest_seats and mnf["seat_manifest"] != "NO_SEAT":
@@ -351,34 +349,45 @@ if menu == "📊 Rekonsiliasi Data":
         else:
             with st.spinner("⏳ Memproses ekstraksi data & mencocokkan kriteria..."):
                 df_tap1 = load_tapping_file(file_tapping1)
+                
                 if flight_mode == "Combine Flight":
                     df_tap2 = load_tapping_file(file_tapping2)
-                    df_tapping = pd.concat([df_tap1, df_tap2], ignore_index=True)
+                    if not df_tap1.empty and not df_tap2.empty:
+                        df_tapping = pd.concat([df_tap1, df_tap2], ignore_index=True)
+                    else:
+                        df_tapping = pd.DataFrame()
                 else:
                     df_tapping = df_tap1
-                    
-                df_manifest = parse_manifest_pdf(file_manifest, airline)
-                df_result = reconcile_engine(df_tapping, df_manifest, airline)
                 
-                st.session_state["history"].append({
-                    "time": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "airline": airline,
-                    "mode": flight_mode,
-                    "total_pax": len(df_result),
-                    "data": df_result
-                })
-
-            st.markdown("### 📈 Ringkasan Rekonsiliasi")
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Total Penumpang", f"{len(df_result)} Pax")
-            col2.metric("🟢 Perfect Match", f"{len(df_result[df_result['Status'] == '🟢 MATCH'])} Pax")
-            col3.metric("🟡 Match Catatan", f"{len(df_result[df_result['Status'] == '🟡 MATCH'])} Pax")
-            col4.metric("🚨 Alert / Unmatched", f"{len(df_result[df_result['Status'].isin(['🔴 NOT MATCH', '🚨 UNMATCHED'])])} Pax")
-            
-            st.write("")
-            st.markdown("### 📋 Detail Hasil Match")
-            
-            st.dataframe(df_result, use_container_width=True, height=450)
+                df_manifest = parse_manifest_pdf(file_manifest, airline)
+                
+                # Cek jika data berhasil dibaca sebelum menjalankan matching
+                if df_tapping.empty:
+                    st.error("❌ Proses dibatalkan karena data Tapping tidak berhasil terbaca/kosong.")
+                elif df_manifest.empty:
+                    st.error("❌ Proses dibatalkan karena data Manifest PDF tidak berhasil terbaca/kosong.")
+                else:
+                    df_result = reconcile_engine(df_tapping, df_manifest, airline)
+                    
+                    # Simpan & Tampilkan Hasil
+                    st.session_state["history"].append({
+                        "time": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "airline": airline,
+                        "mode": flight_mode,
+                        "total_pax": len(df_result),
+                        "data": df_result
+                    })
+                    
+                    st.markdown("### 📈 Ringkasan Rekonsiliasi")
+                    col1, col2, col3, col4 = st.columns(4)
+                    col1.metric("Total Penumpang", f"{len(df_result)} Pax")
+                    col2.metric("🟢 Perfect Match", f"{len(df_result[df_result['Status'] == '🟢 MATCH'])} Pax")
+                    col3.metric("🟡 Match Catatan", f"{len(df_result[df_result['Status'] == '🟡 MATCH'])} Pax")
+                    col4.metric("🚨 Alert / Unmatched", f"{len(df_result[df_result['Status'].isin(['🔴 NOT MATCH', '🚨 UNMATCHED'])])} Pax")
+                    
+                    st.write("")
+                    st.markdown("### 📋 Detail Hasil Match")
+                    st.dataframe(df_result, use_container_width=True, height=450)
             
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine="openpyxl") as writer:
