@@ -21,13 +21,22 @@ st.set_page_config(
 # Custom CSS
 st.markdown("""
     <style>
+    /* MENGGESER LOGO & ISI SIDEBAR KE PALING ATAS */
+    section[data-testid="stSidebar"] > div:first-child {
+        padding-top: 0.5rem !important;
+        padding-bottom: 0rem !important;
+    }
+    div[data-testid="stSidebarUserContent"] {
+        padding-top: 0rem !important;
+    }
+
     .main-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding-bottom: 20px;
+        padding-bottom: 15px;
         border-bottom: 2px solid #e2e8f0;
-        margin-bottom: 25px;
+        margin-bottom: 20px;
     }
     .main-title {
         color: #f8fafc;
@@ -62,13 +71,6 @@ st.markdown("""
         background-color: #0369a1;
         border: none;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-    }
-    section[data-testid="stSidebar"] > div:first-child {
-        padding-top: 0.5rem !important;
-        padding-bottom: 0rem !important;
-    }
-    div[data-testid="stSidebarUserContent"] {
-        padding-top: 0rem !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -226,15 +228,15 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
     return df_res
 
 # -----------------------------------------------------------------------------
-# 4. TAMPILAN SIDEBAR
+# 4. TAMPILAN SIDEBAR (PADAT & MEPET ATAS)
 # -----------------------------------------------------------------------------
 
 with st.sidebar:
     sb_col1, sb_col2, sb_col3 = st.columns([1, 2, 1])
     with sb_col2:
-        st.image(LOGO_URL, width=120)
+        st.image(LOGO_URL, width=110)
         
-    st.markdown("<p style='text-align: center; font-weight: 600; color: #94a3b8; margin-top: -10px; margin-bottom: 5px; font-size: 13px;'>Pax Reconciliation</p>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; font-weight: 600; color: #94a3b8; margin-top: -12px; margin-bottom: -5px; font-size: 12px;'>Pax Reconciliation</p>", unsafe_allow_html=True)
     st.divider()
     
     menu = st.radio("Pilihan Menu:", ["📊 Rekonsiliasi Data", "📜 Histori Log"])
@@ -252,12 +254,10 @@ if menu == "📊 Rekonsiliasi Data":
         st.divider()
         
         st.subheader("2. Upload Dokumen")
-        
-        # MENERIMA FORMAT TXT, CSV, XLSX, XLS DENGAN JELAS
         allowed_types = ["txt", "csv", "xlsx", "xls"]
         
         if flight_mode == "Single Flight":
-            file_tapping1 = st.file_uploader("Upload File Tapping (TXT/CSV/XLSX):", type=allowed_types)
+            file_tapping1 = st.file_uploader("Upload File Tapping:", type=allowed_types)
             file_tapping2 = None
         else:
             file_tapping1 = st.file_uploader("Upload Tapping Flight 1:", type=allowed_types, key="t1")
@@ -320,7 +320,6 @@ if menu == "📊 Rekonsiliasi Data":
             
             st.dataframe(df_result, use_container_width=True, height=450)
             
-            # Export ke Excel
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine="openpyxl") as writer:
                 df_result.to_excel(writer, index=False, sheet_name="Rekonsiliasi")
