@@ -5,15 +5,73 @@ import re
 from rapidfuzz import fuzz, process
 import io
 
-# 1. KONFIGURASI HALAMAN STREAMLIT
+# -----------------------------------------------------------------------------
+# 1. KONFIGURASI HALAMAN & BRANDING INJOURNEY
+# -----------------------------------------------------------------------------
+LOGO_URL = "https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png"
+KAWUNG_ICON = "https://www.injourneyairports.id/assets/kawung-logo-side-CktPU2GK.png"
+
 st.set_page_config(
-    page_title="App Rekonsiliasi Pax",
-    page_icon="✈️",
+    page_title="InJourney Airports - Pax Reconciliation System",
+    page_icon=KAWUNG_ICON,
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# Inisialisasi Session State untuk Histori
+# Custom CSS untuk tampilan Korporat & Elegan
+st.markdown("""
+    <style>
+    /* Styling Header & Aksesibilitas */
+    .main-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #e2e8f0;
+        margin-bottom: 25px;
+    }
+    .main-title {
+        color: #0f172a;
+        font-family: 'Segoe UI', sans-serif;
+        font-weight: 700;
+        font-size: 26px;
+        margin: 0;
+    }
+    .sub-title {
+        color: #64748b;
+        font-size: 14px;
+        margin-top: 4px;
+    }
+    
+    /* Metric Cards Styling */
+    div[data-testid="stMetric"] {
+        background-color: #f8fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 10px;
+        padding: 15px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    
+    /* Custom Primary Button */
+    div.stButton > button:first-child {
+        background-color: #0284c7;
+        color: white;
+        font-weight: 600;
+        border-radius: 8px;
+        border: none;
+        padding: 10px 24px;
+        width: 100%;
+        transition: all 0.3s ease;
+    }
+    div.stButton > button:first-child:hover {
+        background-color: #0369a1;
+        border: none;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# Inisialisasi Session State untuk Histori Log
 if "history" not in st.session_state:
     st.session_state["history"] = []
 
@@ -22,7 +80,7 @@ if "history" not in st.session_state:
 # -----------------------------------------------------------------------------
 
 def parse_manifest_pdf(pdf_file, airline):
-    """Mengekstrak data Nama, Seat, PNR dari PDF Manifest menggunakan RegEx."""
+    """Mengekstrak data Nama, Seat, PNR dari PDF Manifest."""
     manifest_data = []
     
     with pdfplumber.open(pdf_file) as pdf:
@@ -33,21 +91,15 @@ def parse_manifest_pdf(pdf_file, airline):
             
             lines = text.split("\n")
             for line in lines:
-                # Pola Umum: Mencari Nama, PNR (6 karakter), dan Seat (misal: 12A, 017F)
-                # Contoh: ABDILAH/SAYUTITOHIR MR M7DC5S 017F
                 pnr_match = re.search(r"\b([A-Z0-9]{6})\b", line)
                 seat_match = re.search(r"\b([0-9]{1,2}[A-F])\b", line)
-                
-                # Mengambil string nama (Pola umum nama maskapai: NAMA/DEPAN MR/MRS/MS atau NAMA, DEPAN)
                 name_match = re.search(r"([A-Z\s\/,\.-]+(?:MR|MRS|MS|MISS|MSTR|TITOHIR|PAX)?)", line)
                 
                 pnr = pnr_match.group(1) if pnr_match else None
                 seat = seat_match.group(1) if seat_match else None
                 
-                # Filter agar garis header/teks biasa tidak masuk sebagai nama
                 if seat or pnr:
                     raw_name = name_match.group(1).strip() if name_match else line[:25].strip()
-                    # Clean up nama dari karakter berlebih
                     clean_name = re.sub(r"[^A-Z\s\/]", "", raw_name).strip()
                     
                     if len(clean_name) > 3:
@@ -72,12 +124,11 @@ def load_tapping_file(uploaded_file):
         st.error("Format file tapping tidak didukung!")
         return None
     
-    # Standarisasi Nama Kolom (Case-insensitive)
     df.columns = [str(col).strip().upper() for col in df.columns]
     return df
 
 # -----------------------------------------------------------------------------
-# 3. ENGINE MATCHING (SESUAI HIRARKI ANDA)
+# 3. ENGINE MATCHING
 # -----------------------------------------------------------------------------
 
 def reconcile_engine(df_tapping, df_manifest, airline_name):
@@ -95,11 +146,10 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
         matched_seat_manifest = "-"
         matched_pnr_manifest = "-"
         
-        # Algoritma Fuzzy Matching untuk Mencari Nama Terdekat di Manifest
         manifest_names = df_manifest["nama_manifest"].tolist()
         best_match = process.extractOne(tap_nama, manifest_names, scorer=fuzz.token_sort_ratio)
         
-        if best_match and best_match[1] >= 75: # Threshold kemiripan nama 75%
+        if best_match and best_match[1] >= 75:
             match_row = df_manifest[df_manifest["nama_manifest"] == best_match[0]].iloc[0]
             mnf_seat = match_row["seat_manifest"]
             mnf_pnr = match_row["pnr_manifest"]
@@ -107,7 +157,6 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
             matched_seat_manifest = mnf_seat
             matched_pnr_manifest = mnf_pnr
             
-            # --- EVALUASI HIRARKI (a - e) ---
             is_seat_same = (tap_seat == mnf_seat)
             is_pnr_same = (tap_pnr == mnf_pnr) if (has_manifest_pnr and tap_pnr != "") else False
             
@@ -129,7 +178,6 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
                 status = "🔴 NOT MATCH"
                 catatan = "Nama beda / Perlu Validasi" + pnr_note
         else:
-            # Poin g: Ada di Tapping tapi tidak ada di Manifest
             status = "🚨 UNMATCHED"
             catatan = "Offload / Not in Manifest"
             
@@ -146,7 +194,6 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
         
     df_res = pd.DataFrame(results)
     
-    # Poin h: Ada di Manifest tetapi TIDAK ADA di Data Tapping (Not Scan / No Show)
     scanned_manifest_seats = df_res["Seat Manifest"].tolist()
     no_show_list = []
     for idx, mnf in df_manifest.iterrows():
@@ -168,26 +215,29 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
     return df_res
 
 # -----------------------------------------------------------------------------
-# 4. TAMPILAN SIDEBAR (NAVIGATION & INPUTS)
+# 4. TAMPILAN SIDEBAR (NAVIGASI & INPUT)
 # -----------------------------------------------------------------------------
 
 with st.sidebar:
-    st.title("✈️ Pax Reconciliation")
-    menu = st.radio("Pilih Menu:", ["📊 Rekonsiliasi", "📜 Histori Log"])
+    st.image(LOGO_URL, use_container_width=True)
+    st.markdown("<h4 style='text-align: center; color: #475569;'>Pax Reconciliation</h4>", unsafe_allow_html=True)
+    st.divider()
+    
+    menu = st.radio("Pilihan Menu:", ["📊 Rekonsiliasi Data", "📜 Histori Log"])
     st.divider()
 
-if menu == "📊 Rekonsiliasi":
+if menu == "📊 Rekonsiliasi Data":
     with st.sidebar:
-        st.subheader("1. Setting Flight")
+        st.subheader("1. Pengaturan Flight")
         airline = st.selectbox(
             "Pilih Maskapai:",
             ["Lion Group (JT/IW/ID)", "Garuda Indonesia (GA)", "Citilink (QG)", "Scoot (TR)", "Malaysia Airlines (MH)", "Lainnya"]
         )
         
-        flight_mode = st.radio("Mode Flight:", ["Single Flight", "Combine Flight"])
+        flight_mode = st.radio("Mode Penerbangan:", ["Single Flight", "Combine Flight"])
         st.divider()
         
-        st.subheader("2. Upload Files")
+        st.subheader("2. Upload Dokumen")
         
         if flight_mode == "Single Flight":
             file_tapping1 = st.file_uploader("Upload File Tapping (CSV/XLS/TXT):", type=["csv", "xlsx", "xls", "txt"])
@@ -196,22 +246,35 @@ if menu == "📊 Rekonsiliasi":
             file_tapping1 = st.file_uploader("Upload Tapping Flight 1:", type=["csv", "xlsx", "xls", "txt"], key="t1")
             file_tapping2 = st.file_uploader("Upload Tapping Flight 2:", type=["csv", "xlsx", "xls", "txt"], key="t2")
             
-        file_manifest = st.file_uploader("Upload File Manifest (PDF/TXT):", type=["pdf", "txt"])
+        file_manifest = st.file_uploader("Upload Manifest PDF/TXT:", type=["pdf", "txt"])
         
-        btn_proses = st.button("🚀 MULAI PROSES", use_container_state_style=True)
+        st.write("")
+        # FIX ERROR: Mengubah use_container_state_style menjadi use_container_width
+        btn_proses = st.button("🚀 MULAI REKONSILIASI", use_container_width=True)
 
     # -------------------------------------------------------------------------
-    # 5. HALAMAN UTAMA (CONTENT AREA & PROCESSING)
+    # 5. HALAMAN UTAMA (CONTENT AREA & HEADER LOGO)
     # -------------------------------------------------------------------------
-    st.title("📊 Hasil Rekonsiliasi Pax")
     
+    # Custom Header
+    col_head1, col_head2 = st.columns([3, 1])
+    with col_head1:
+        st.markdown("""
+            <div class="main-header">
+                <div>
+                    <h1 class="main-title">Passenger Reconciliation System</h1>
+                    <div class="sub-title">Sistem Rekonsiliasi Data Tapping Gate vs Passenger Manifest</div>
+                </div>
+            </div>
+        """, unsafe_allow_html=True)
+    with col_head2:
+        st.image(LOGO_URL, width=220)
+
     if btn_proses:
-        # Validasi Input File
         if not file_manifest or not file_tapping1 or (flight_mode == "Combine Flight" and not file_tapping2):
-            st.error("⚠️ Mohon lengkapi semua file upload sebelum memproses!")
+            st.error("⚠️ Mohon lengkapi semua file upload di sidebar sebelum memproses!")
         else:
-            with st.spinner("⏳ Memproses data manifest & membandingkan dengan RegEx..."):
-                # Load Tapping Data
+            with st.spinner("⏳ Memproses ekstraksi data & mencocokkan kriteria..."):
                 df_tap1 = load_tapping_file(file_tapping1)
                 if flight_mode == "Combine Flight":
                     df_tap2 = load_tapping_file(file_tapping2)
@@ -219,13 +282,10 @@ if menu == "📊 Rekonsiliasi":
                 else:
                     df_tapping = df_tap1
                     
-                # Load & Parse Manifest
                 df_manifest = parse_manifest_pdf(file_manifest, airline)
-                
-                # Run Reconciliation
                 df_result = reconcile_engine(df_tapping, df_manifest, airline)
                 
-                # Simpan ke Session History
+                # Simpan ke Histori
                 st.session_state["history"].append({
                     "time": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "airline": airline,
@@ -235,38 +295,42 @@ if menu == "📊 Rekonsiliasi":
                 })
 
             # Display Ringkasan Metrik
+            st.markdown("### 📈 Ringkasan Rekonsiliasi")
             col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Total Pax", len(df_result))
-            col2.metric("🟢 Perfect Match", len(df_result[df_result["Status"] == "🟢 MATCH"]))
-            col3.metric("🟡 Match Catatan", len(df_result[df_result["Status"] == "🟡 MATCH"]))
-            col4.metric("🚨 Alert/Unmatched", len(df_result[df_result["Status"].isin(["🔴 NOT MATCH", "🚨 UNMATCHED"])]))
+            col1.metric("Total Penumpang", f"{len(df_result)} Pax")
+            col2.metric("🟢 Perfect Match", f"{len(df_result[df_result['Status'] == '🟢 MATCH'])} Pax")
+            col3.metric("🟡 Match Catatan", f"{len(df_result[df_result['Status'] == '🟡 MATCH'])} Pax")
+            col4.metric("🚨 Alert / Unmatched", f"{len(df_result[df_result['Status'].isin(['🔴 NOT MATCH', '🚨 UNMATCHED'])])} Pax")
             
-            st.divider()
+            st.write("")
+            st.markdown("### 📋 Detail Hasil Match")
             
             # Tampilkan Tabel
-            st.dataframe(df_result, use_container_width=True, height=500)
+            st.dataframe(df_result, use_container_width=True, height=450)
             
-            # Button Download Excel
+            # Export ke Excel
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                df_result.to_excel(writer, index=False, sheet_name="Hasil Rekonsiliasi")
+                df_result.to_excel(writer, index=False, sheet_name="Rekonsiliasi")
             
             st.download_button(
-                label="📥 Download Hasil (.XLSX)",
+                label="📥 Download Laporan Rekonsiliasi (.XLSX)",
                 data=output.getvalue(),
-                file_name=f"Hasil_Rekonsiliasi_{airline.split()[0]}.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                file_name=f"InJourney_Rekonsiliasi_{airline.split()[0]}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
             )
             
     else:
-        st.info("👈 Silakan atur maskapai, upload file di **Sidebar sebelah kiri**, lalu klik tombol **MULAI PROSES**.")
+        st.info("👈 Silakan atur maskapai, mode penerbangan, dan upload dokumen pada **Sidebar sebelah kiri**, lalu klik **MULAI REKONSILIASI**.")
 
 elif menu == "📜 Histori Log":
     st.title("📜 Histori Log Rekonsiliasi")
+    st.caption("Daftar riwayat pemrosesan data rekonsiliasi pada sesi ini.")
     
     if len(st.session_state["history"]) == 0:
-        st.warning("Belum ada riwayat rekonsiliasi pada sesi ini.")
+        st.warning("Belum ada riwayat rekonsiliasi yang dilakukan.")
     else:
         for idx, item in enumerate(reversed(st.session_state["history"])):
-            with st.expander(f"🕒 {item['time']} - {item['airline']} ({item['mode']}) - Total: {item['total_pax']} Pax"):
+            with st.expander(f"🕒 {item['time']} — {item['airline']} ({item['mode']}) — Total: {item['total_pax']} Pax"):
                 st.dataframe(item["data"], use_container_width=True)
