@@ -38,7 +38,7 @@ st.markdown("""
     
     /* UKURAN LOGO MEMBESAR GAGAH */
     [data-testid="stSidebarHeader"] img {
-        max-height: 65px !important;
+        max-height: 200px !important;
         width: auto !important;
         margin: 0 auto !important;
     }
