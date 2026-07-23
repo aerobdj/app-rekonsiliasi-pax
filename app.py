@@ -106,9 +106,9 @@ st.markdown("""
         margin-top: 4px;
     }
 
-    /* KARTU SERAGAM */
+    /* KARTU SERAGAM & ELEGAN (ROUNDED DESAIN) */
     .custom-card {
-        background: rgba(30, 41, 59, 0.05);
+        background: rgba(30, 41, 59, 0.03);
         border: 1px solid rgba(148, 163, 184, 0.25);
         border-left: 4px solid #0284c7;
         border-radius: 10px;
@@ -123,7 +123,7 @@ st.markdown("""
     .custom-card-label {
         font-size: 11px;
         font-weight: 600;
-        color: #94a3b8;
+        color: #64748b;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         margin-bottom: 2px;
@@ -131,12 +131,12 @@ st.markdown("""
     .custom-card-value {
         font-size: 15px;
         font-weight: 700;
-        color: #38bdf8;
+        color: #0284c7;
     }
 
     /* TOMBOL FILTER METRIK BERGAYA CARD */
     div.stButton > button {
-        background: rgba(30, 41, 59, 0.05) !important;
+        background: rgba(30, 41, 59, 0.03) !important;
         border: 1px solid rgba(148, 163, 184, 0.25) !important;
         border-radius: 10px !important;
         padding: 10px !important;
@@ -146,26 +146,15 @@ st.markdown("""
     }
     div.stButton > button:hover {
         border-color: #0284c7 !important;
-        background: rgba(2, 132, 199, 0.1) !important;
+        background: rgba(2, 132, 199, 0.08) !important;
         transform: translateY(-2px);
-    }
-
-    /* TRICK STICKY / FREEZE DETAIL PENERBANGAN NATIVE STREAMLIT */
-    div[data-testid="stVerticalBlock"] > div:has(#sticky-marker) {
-        position: sticky !important;
-        top: 2.875rem !important; /* Posisi melayang tepat di bawah header Streamlit */
-        z-index: 999 !important;
-        background-color: var(--background-color, #0f172a) !important;
-        padding-top: 8px !important;
-        padding-bottom: 12px !important;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.2) !important;
     }
 
     .section-header {
         font-size: 16px;
         font-weight: 700;
-        margin-top: 4px;
-        margin-bottom: 8px;
+        margin-top: 8px;
+        margin-bottom: 12px;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -497,11 +486,10 @@ if menu == "📊 Rekonsiliasi Data":
                     })
 
                     # =========================================================
-                    # 1. DETAIL PENERBANGAN (STICKY VIA CONTAINER NATIVE)
+                    # 1. DETAIL PENERBANGAN (DESAIN KARTU ROUNDED CLEAN)
                     # =========================================================
-                    with st.container():
-                        st.markdown('<div id="sticky-marker"></div>', unsafe_allow_html=True)
-                        st.markdown('<div class="section-header">✈️ Detail Penerbangan</div>', unsafe_allow_html=True)
+                    with st.container(border=True):
+                        st.markdown('<div class="section-header" style="margin-top:0;">✈️ Detail Penerbangan</div>', unsafe_allow_html=True)
                         
                         fc1, fc2, fc3, fc4, fc5, fc6, fc7 = st.columns(7)
                         with fc1:
@@ -553,6 +541,8 @@ if menu == "📊 Rekonsiliasi Data":
                                     <div class="custom-card-value">{flight_no_mnf}</div>
                                 </div>
                             ''', unsafe_allow_html=True)
+
+                    st.write("")
 
                     # ---------------------------------------------------------
                     # 2. RINGKASAN HASIL REKONSILIASI
@@ -612,7 +602,7 @@ if menu == "📊 Rekonsiliasi Data":
                     
                     with pax_col1:
                         with st.container(border=True):
-                            st.markdown('<div style="font-size: 14px; font-weight: 700; color: #38bdf8; margin-bottom: 8px;">📲 DATA SCAN</div>', unsafe_allow_html=True)
+                            st.markdown('<div style="font-size: 14px; font-weight: 700; color: #0284c7; margin-bottom: 8px;">📲 DATA SCAN</div>', unsafe_allow_html=True)
                             ps1, ps2, ps3, ps4 = st.columns(4)
                             ps1.metric("Adult Scan", f"{scan_adult}")
                             ps2.metric("Child Scan", f"{scan_child}")
@@ -633,7 +623,7 @@ if menu == "📊 Rekonsiliasi Data":
                     # ---------------------------------------------------------
                     col_t1, col_t2 = st.columns([3, 1])
                     with col_t1:
-                        st.markdown(f'<div class="section-header">📋 Detail Pencocokan Penumpang <span style="font-size: 14px; font-weight: normal; color: #38bdf8;">(Filter Active: {st.session_state["filter_status"]})</span></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="section-header">📋 Detail Pencocokan Penumpang <span style="font-size: 14px; font-weight: normal; color: #0284c7;">(Filter Active: {st.session_state["filter_status"]})</span></div>', unsafe_allow_html=True)
                     with col_t2:
                         if st.button("🔄 Reset Filter Tabel", use_container_width=True):
                             st.session_state["filter_status"] = "ALL"
