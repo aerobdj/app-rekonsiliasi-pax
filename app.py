@@ -27,17 +27,6 @@ st.logo(
 # Custom CSS
 st.markdown("""
     <style>
-    /* MENGATUR OVERFLOW PARENT AGAR STICKY/FREEZE BEKERJA DI STREAMLIT */
-    [data-testid="stAppViewContainer"] {
-        overflow: auto !important;
-    }
-    section.main {
-        overflow: visible !important;
-    }
-    [data-testid="stMainBlockContainer"] {
-        overflow: visible !important;
-    }
-
     /* PADDING SIDEBAR */
     section[data-testid="stSidebar"] > div:first-child {
         padding-top: 0.5rem !important;
@@ -161,16 +150,15 @@ st.markdown("""
         transform: translateY(-2px);
     }
 
-    /* STICKY / FREEZE UNTUK DETAIL PENERBANGAN (GARIS HITAM SUDAH DIHAPUS) */
-    .sticky-flight-zone {
-        position: -webkit-sticky !important;
+    /* TRICK STICKY / FREEZE DETAIL PENERBANGAN NATIVE STREAMLIT */
+    div[data-testid="stVerticalBlock"] > div:has(#sticky-marker) {
         position: sticky !important;
-        top: 0 !important;
+        top: 2.875rem !important; /* Posisi melayang tepat di bawah header Streamlit */
         z-index: 999 !important;
-        background-color: var(--background-color, #0f172a);
-        padding-top: 10px;
-        padding-bottom: 10px;
-        margin-bottom: 16px;
+        background-color: var(--background-color, #0f172a) !important;
+        padding-top: 8px !important;
+        padding-bottom: 12px !important;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.2) !important;
     }
 
     .section-header {
@@ -509,64 +497,62 @@ if menu == "📊 Rekonsiliasi Data":
                     })
 
                     # =========================================================
-                    # 1. KHUSUS DETAIL PENERBANGAN YANG DI-FREEZE (STICKY)
+                    # 1. DETAIL PENERBANGAN (STICKY VIA CONTAINER NATIVE)
                     # =========================================================
-                    st.markdown("""
-                        <div class="sticky-flight-zone">
-                            <div class="section-header">✈️ Detail Penerbangan</div>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
-                    fc1, fc2, fc3, fc4, fc5, fc6, fc7 = st.columns(7)
-                    with fc1:
-                        st.markdown(f'''
-                            <div class="custom-card">
-                                <div class="custom-card-label">🏢 Airline</div>
-                                <div class="custom-card-value">{airline.split()[0]}</div>
-                            </div>
-                        ''', unsafe_allow_html=True)
-                    with fc2:
-                        st.markdown(f'''
-                            <div class="custom-card">
-                                <div class="custom-card-label">📄 No Flight</div>
-                                <div class="custom-card-value">{flight_no_mnf}</div>
-                            </div>
-                        ''', unsafe_allow_html=True)
-                    with fc3:
-                        st.markdown(f'''
-                            <div class="custom-card" style="border-left-color: #eab308;">
-                                <div class="custom-card-label">📍 Rute</div>
-                                <div class="custom-card-value">{flight_route_mnf}</div>
-                            </div>
-                        ''', unsafe_allow_html=True)
-                    with fc4:
-                        st.markdown(f'''
-                            <div class="custom-card">
-                                <div class="custom-card-label">📅 Tanggal</div>
-                                <div class="custom-card-value">{flight_date_mnf}</div>
-                            </div>
-                        ''', unsafe_allow_html=True)
-                    with fc5:
-                        st.markdown(f'''
-                            <div class="custom-card">
-                                <div class="custom-card-label">📲 Scan 1</div>
-                                <div class="custom-card-value">{flight_scan1}</div>
-                            </div>
-                        ''', unsafe_allow_html=True)
-                    with fc6:
-                        st.markdown(f'''
-                            <div class="custom-card">
-                                <div class="custom-card-label">📲 Scan 2</div>
-                                <div class="custom-card-value">{flight_scan2}</div>
-                            </div>
-                        ''', unsafe_allow_html=True)
-                    with fc7:
-                        st.markdown(f'''
-                            <div class="custom-card">
-                                <div class="custom-card-label">📌 Manifest</div>
-                                <div class="custom-card-value">{flight_no_mnf}</div>
-                            </div>
-                        ''', unsafe_allow_html=True)
+                    with st.container():
+                        st.markdown('<div id="sticky-marker"></div>', unsafe_allow_html=True)
+                        st.markdown('<div class="section-header">✈️ Detail Penerbangan</div>', unsafe_allow_html=True)
+                        
+                        fc1, fc2, fc3, fc4, fc5, fc6, fc7 = st.columns(7)
+                        with fc1:
+                            st.markdown(f'''
+                                <div class="custom-card">
+                                    <div class="custom-card-label">🏢 Airline</div>
+                                    <div class="custom-card-value">{airline.split()[0]}</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                        with fc2:
+                            st.markdown(f'''
+                                <div class="custom-card">
+                                    <div class="custom-card-label">📄 No Flight</div>
+                                    <div class="custom-card-value">{flight_no_mnf}</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                        with fc3:
+                            st.markdown(f'''
+                                <div class="custom-card" style="border-left-color: #eab308;">
+                                    <div class="custom-card-label">📍 Rute</div>
+                                    <div class="custom-card-value">{flight_route_mnf}</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                        with fc4:
+                            st.markdown(f'''
+                                <div class="custom-card">
+                                    <div class="custom-card-label">📅 Tanggal</div>
+                                    <div class="custom-card-value">{flight_date_mnf}</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                        with fc5:
+                            st.markdown(f'''
+                                <div class="custom-card">
+                                    <div class="custom-card-label">📲 Scan 1</div>
+                                    <div class="custom-card-value">{flight_scan1}</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                        with fc6:
+                            st.markdown(f'''
+                                <div class="custom-card">
+                                    <div class="custom-card-label">📲 Scan 2</div>
+                                    <div class="custom-card-value">{flight_scan2}</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                        with fc7:
+                            st.markdown(f'''
+                                <div class="custom-card">
+                                    <div class="custom-card-label">📌 Manifest</div>
+                                    <div class="custom-card-value">{flight_no_mnf}</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
 
                     # ---------------------------------------------------------
                     # 2. RINGKASAN HASIL REKONSILIASI
@@ -608,7 +594,7 @@ if menu == "📊 Rekonsiliasi Data":
                     st.write("")
 
                     # ---------------------------------------------------------
-                    # 3. RINGKASAN TYPE PAX (MENGGUNAKAN CONTAINER BORDER STREAMLIT NATIVE)
+                    # 3. RINGKASAN TYPE PAX
                     # ---------------------------------------------------------
                     st.markdown('<div class="section-header">👥 Ringkasan Type Pax</div>', unsafe_allow_html=True)
                     
@@ -624,7 +610,6 @@ if menu == "📊 Rekonsiliasi Data":
 
                     pax_col1, pax_col2 = st.columns(2)
                     
-                    # KOTAK 1: DATA SCAN (100% DIDALAM KOTAK BORDER)
                     with pax_col1:
                         with st.container(border=True):
                             st.markdown('<div style="font-size: 14px; font-weight: 700; color: #38bdf8; margin-bottom: 8px;">📲 DATA SCAN</div>', unsafe_allow_html=True)
@@ -634,7 +619,6 @@ if menu == "📊 Rekonsiliasi Data":
                             ps3.metric("Infant Scan", f"{scan_infant}")
                             ps4.metric("Transit Scan", f"{scan_transit}")
 
-                    # KOTAK 2: DATA MANIFEST (100% DIDALAM KOTAK BORDER)
                     with pax_col2:
                         with st.container(border=True):
                             st.markdown('<div style="font-size: 14px; font-weight: 700; color: #a855f7; margin-bottom: 8px;">📋 DATA MANIFEST</div>', unsafe_allow_html=True)
