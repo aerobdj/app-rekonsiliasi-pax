@@ -24,7 +24,7 @@ st.logo(
     size="large"
 )
 
-# Custom CSS untuk Sticky Dashboard & Uniform Card Design
+# Custom CSS
 st.markdown("""
     <style>
     /* PADDING SIDEBAR */
@@ -91,7 +91,7 @@ st.markdown("""
         justify-content: space-between;
         padding-bottom: 12px;
         border-bottom: 2px solid rgba(148, 163, 184, 0.3);
-        margin-bottom: 20px;
+        margin-bottom: 16px;
     }
     .main-title {
         font-family: 'Segoe UI', -apple-system, Roboto, sans-serif;
@@ -112,8 +112,8 @@ st.markdown("""
         border: 1px solid rgba(148, 163, 184, 0.25);
         border-left: 4px solid #0284c7;
         border-radius: 10px;
-        padding: 12px 16px;
-        margin-bottom: 10px;
+        padding: 10px 14px;
+        margin-bottom: 6px;
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
     .custom-card:hover {
@@ -126,29 +126,44 @@ st.markdown("""
         color: #94a3b8;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-        margin-bottom: 4px;
+        margin-bottom: 2px;
     }
     .custom-card-value {
-        font-size: 16px;
+        font-size: 15px;
         font-weight: 700;
         color: #38bdf8;
     }
 
-    /* KONTEN TYPE PAX CARD CONTAINER */
-    .pax-box {
-        background: rgba(30, 41, 59, 0.03);
-        border: 1px solid rgba(148, 163, 184, 0.25);
-        border-radius: 10px;
-        padding: 14px;
-        margin-bottom: 10px;
+    /* KONTEN TYPE PAX CARD CONTAINER UTUH */
+    .pax-box-scan {
+        background: rgba(2, 132, 199, 0.04);
+        border: 1px solid rgba(2, 132, 199, 0.25);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
     }
-    .pax-box-title {
+    .pax-box-manifest {
+        background: rgba(168, 85, 247, 0.04);
+        border: 1px solid rgba(168, 85, 247, 0.25);
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 12px;
+    }
+    .pax-box-title-scan {
         font-size: 14px;
         font-weight: 700;
-        margin-bottom: 10px;
-        padding-bottom: 4px;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.2);
         color: #38bdf8;
+        margin-bottom: 12px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid rgba(2, 132, 199, 0.2);
+    }
+    .pax-box-title-manifest {
+        font-size: 14px;
+        font-weight: 700;
+        color: #a855f7;
+        margin-bottom: 12px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid rgba(168, 85, 247, 0.2);
     }
 
     /* TOMBOL FILTER METRIK BERGAYA CARD */
@@ -167,24 +182,24 @@ st.markdown("""
         transform: translateY(-2px);
     }
 
-    /* FREEZE / STICKY HEADER SECTION */
-    .sticky-header-zone {
+    /* FREEZE KHUSUS DETAIL PENERBANGAN SAJA */
+    .sticky-flight-zone {
         position: -webkit-sticky;
         position: sticky;
         top: 0;
         z-index: 99;
         background-color: var(--background-color, #0f172a);
-        padding-top: 10px;
+        padding-top: 6px;
         padding-bottom: 10px;
         border-bottom: 2px solid rgba(148, 163, 184, 0.2);
-        margin-bottom: 15px;
+        margin-bottom: 16px;
     }
 
     .section-header {
         font-size: 16px;
         font-weight: 700;
-        margin-top: 6px;
-        margin-bottom: 10px;
+        margin-top: 4px;
+        margin-bottom: 8px;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -280,7 +295,6 @@ def parse_manifest_pdf(pdf_file, airline):
                 if route_match:
                     flight_route_mnf = route_match.group(1).replace(" ", "").strip()
                 else:
-                    # Alternative route format (e.g. CGKBDJ or CGK-BDJ)
                     alt_route = re.search(r"\b([A-Z]{3}[\-\/][A-Z]{3})\b", text)
                     if alt_route:
                         flight_route_mnf = alt_route.group(1).strip()
@@ -517,152 +531,141 @@ if menu == "📊 Rekonsiliasi Data":
                     })
 
                     # =========================================================
-                    # FREEZE / STICKY CONTAINER FOR DASHBOARD HEADER
+                    # 1. KHUSUS DETAIL PENERBANGAN YANG DI-FREEZE (STICKY)
                     # =========================================================
-                    with st.container():
-                        st.markdown('<div class="sticky-header-zone">', unsafe_allow_html=True)
+                    st.markdown('<div class="sticky-flight-zone">', unsafe_allow_html=True)
+                    st.markdown('<div class="section-header">✈️ Detail Penerbangan</div>', unsafe_allow_html=True)
+                    
+                    fc1, fc2, fc3, fc4, fc5, fc6, fc7 = st.columns(7)
+                    with fc1:
+                        st.markdown(f'''
+                            <div class="custom-card">
+                                <div class="custom-card-label">🏢 Airline</div>
+                                <div class="custom-card-value">{airline.split()[0]}</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                    with fc2:
+                        st.markdown(f'''
+                            <div class="custom-card">
+                                <div class="custom-card-label">📄 No Flight</div>
+                                <div class="custom-card-value">{flight_no_mnf}</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                    with fc3:
+                        st.markdown(f'''
+                            <div class="custom-card" style="border-left-color: #eab308;">
+                                <div class="custom-card-label">📍 Rute</div>
+                                <div class="custom-card-value">{flight_route_mnf}</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                    with fc4:
+                        st.markdown(f'''
+                            <div class="custom-card">
+                                <div class="custom-card-label">📅 Tanggal</div>
+                                <div class="custom-card-value">{flight_date_mnf}</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                    with fc5:
+                        st.markdown(f'''
+                            <div class="custom-card">
+                                <div class="custom-card-label">📲 Scan 1</div>
+                                <div class="custom-card-value">{flight_scan1}</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                    with fc6:
+                        st.markdown(f'''
+                            <div class="custom-card">
+                                <div class="custom-card-label">📲 Scan 2</div>
+                                <div class="custom-card-value">{flight_scan2}</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                    with fc7:
+                        st.markdown(f'''
+                            <div class="custom-card">
+                                <div class="custom-card-label">📌 Manifest</div>
+                                <div class="custom-card-value">{flight_no_mnf}</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
 
-                        # -----------------------------------------------------
-                        # 1. DETAIL PENERBANGAN
-                        # -----------------------------------------------------
-                        st.markdown('<div class="section-header">✈️ Detail Penerbangan</div>', unsafe_allow_html=True)
-                        
-                        fc1, fc2, fc3, fc4, fc5, fc6, fc7 = st.columns(7)
-                        with fc1:
-                            st.markdown(f'''
-                                <div class="custom-card">
-                                    <div class="custom-card-label">🏢 Airline</div>
-                                    <div class="custom-card-value">{airline.split()[0]}</div>
-                                </div>
-                            ''', unsafe_allow_html=True)
-                        with fc2:
-                            st.markdown(f'''
-                                <div class="custom-card">
-                                    <div class="custom-card-label">📄 No Flight</div>
-                                    <div class="custom-card-value">{flight_no_mnf}</div>
-                                </div>
-                            ''', unsafe_allow_html=True)
-                        with fc3:
-                            st.markdown(f'''
-                                <div class="custom-card" style="border-left-color: #eab308;">
-                                    <div class="custom-card-label">📍 Rute</div>
-                                    <div class="custom-card-value">{flight_route_mnf}</div>
-                                </div>
-                            ''', unsafe_allow_html=True)
-                        with fc4:
-                            st.markdown(f'''
-                                <div class="custom-card">
-                                    <div class="custom-card-label">📅 Tanggal</div>
-                                    <div class="custom-card-value">{flight_date_mnf}</div>
-                                </div>
-                            ''', unsafe_allow_html=True)
-                        with fc5:
-                            st.markdown(f'''
-                                <div class="custom-card">
-                                    <div class="custom-card-label">📲 Scan 1</div>
-                                    <div class="custom-card-value">{flight_scan1}</div>
-                                </div>
-                            ''', unsafe_allow_html=True)
-                        with fc6:
-                            st.markdown(f'''
-                                <div class="custom-card">
-                                    <div class="custom-card-label">📲 Scan 2</div>
-                                    <div class="custom-card-value">{flight_scan2}</div>
-                                </div>
-                            ''', unsafe_allow_html=True)
-                        with fc7:
-                            st.markdown(f'''
-                                <div class="custom-card">
-                                    <div class="custom-card-label">📌 Manifest</div>
-                                    <div class="custom-card-value">{flight_no_mnf}</div>
-                                </div>
-                            ''', unsafe_allow_html=True)
+                    # ---------------------------------------------------------
+                    # 2. RINGKASAN HASIL REKONSILIASI
+                    # ---------------------------------------------------------
+                    st.markdown('<div class="section-header">📈 Ringkasan Hasil Rekonsiliasi</div>', unsafe_allow_html=True)
+                    
+                    cnt_scan = len(df_result[df_result["NAMA SCAN"] != "-"])
+                    cnt_manifest = len(df_manifest)
+                    cnt_match = len(df_result[df_result["HASIL"].str.contains("MATCH")])
+                    cnt_offload = len(df_result[df_result["HASIL"].str.contains("OFFLOAD")])
+                    cnt_seat_conflict = len(df_result[df_result["HASIL"].str.contains("SEAT CONFLICT")])
+                    cnt_not_scan = len(df_result[df_result["HASIL"].str.contains("NOT SCAN")])
 
-                        # -----------------------------------------------------
-                        # 2. RINGKASAN HASIL REKONSILIASI (CARD UNIFORM INTERAKSI)
-                        # -----------------------------------------------------
-                        st.markdown('<div class="section-header">📈 Ringkasan Hasil Rekonsiliasi</div>', unsafe_allow_html=True)
-                        
-                        cnt_scan = len(df_result[df_result["NAMA SCAN"] != "-"])
-                        cnt_manifest = len(df_manifest)
-                        cnt_match = len(df_result[df_result["HASIL"].str.contains("MATCH")])
-                        cnt_offload = len(df_result[df_result["HASIL"].str.contains("OFFLOAD")])
-                        cnt_seat_conflict = len(df_result[df_result["HASIL"].str.contains("SEAT CONFLICT")])
-                        cnt_not_scan = len(df_result[df_result["HASIL"].str.contains("NOT SCAN")])
+                    r_col1, r_col2, r_col3, r_col4, r_col5, r_col6 = st.columns(6)
+                    with r_col1:
+                        st.markdown(f'''
+                            <div class="custom-card" style="border-left-color: #38bdf8;">
+                                <div class="custom-card-label">📊 Pax Scan</div>
+                                <div class="custom-card-value">{cnt_scan} Pax</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                    with r_col2:
+                        st.markdown(f'''
+                            <div class="custom-card" style="border-left-color: #a855f7;">
+                                <div class="custom-card-label">📋 Pax Manifest</div>
+                                <div class="custom-card-value">{cnt_manifest} Pax</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                    
+                    if r_col3.button(f"🟢 MATCH\n\n{cnt_match} Pax", use_container_width=True):
+                        st.session_state["filter_status"] = "MATCH"
+                    if r_col4.button(f"🔴 OFFLOAD\n\n{cnt_offload} Pax", use_container_width=True):
+                        st.session_state["filter_status"] = "OFFLOAD"
+                    if r_col5.button(f"🟠 SEAT CONFLICT\n\n{cnt_seat_conflict} Pax", use_container_width=True):
+                        st.session_state["filter_status"] = "SEAT CONFLICT"
+                    if r_col6.button(f"⚪ NOT SCAN\n\n{cnt_not_scan} Pax", use_container_width=True):
+                        st.session_state["filter_status"] = "NOT SCAN"
 
-                        r_col1, r_col2, r_col3, r_col4, r_col5, r_col6 = st.columns(6)
-                        with r_col1:
-                            st.markdown(f'''
-                                <div class="custom-card" style="border-left-color: #38bdf8;">
-                                    <div class="custom-card-label">📊 Pax Scan</div>
-                                    <div class="custom-card-value">{cnt_scan} Pax</div>
-                                </div>
-                            ''', unsafe_allow_html=True)
-                        with r_col2:
-                            st.markdown(f'''
-                                <div class="custom-card" style="border-left-color: #a855f7;">
-                                    <div class="custom-card-label">📋 Pax Manifest</div>
-                                    <div class="custom-card-value">{cnt_manifest} Pax</div>
-                                </div>
-                            ''', unsafe_allow_html=True)
-                        
-                        # Tombol Seragam Bergaya Custom Card & Dapat Diklik Filter
-                        if r_col3.button(f"🟢 MATCH\n\n{cnt_match} Pax", use_container_width=True):
-                            st.session_state["filter_status"] = "MATCH"
-                        if r_col4.button(f"🔴 OFFLOAD\n\n{cnt_offload} Pax", use_container_width=True):
-                            st.session_state["filter_status"] = "OFFLOAD"
-                        if r_col5.button(f"🟠 SEAT CONFLICT\n\n{cnt_seat_conflict} Pax", use_container_width=True):
-                            st.session_state["filter_status"] = "SEAT CONFLICT"
-                        if r_col6.button(f"⚪ NOT SCAN\n\n{cnt_not_scan} Pax", use_container_width=True):
-                            st.session_state["filter_status"] = "NOT SCAN"
+                    st.write("")
 
-                        # -----------------------------------------------------
-                        # 3. RINGKASAN TYPE PAX (DUAL KOTAK CARD SCAN VS MANIFEST)
-                        # -----------------------------------------------------
-                        st.markdown('<div class="section-header">👥 Ringkasan Type Pax</div>', unsafe_allow_html=True)
-                        
-                        scan_adult = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("ADULT|ADT", na=False))])
-                        scan_child = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("CHILD|CHD", na=False))])
-                        scan_infant = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("INFANT|INF", na=False))])
-                        scan_transit = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("TRANSIT|TRNS", na=False))])
+                    # ---------------------------------------------------------
+                    # 3. RINGKASAN TYPE PAX (KOTAK SCAN & KOTAK MANIFEST UTUH)
+                    # ---------------------------------------------------------
+                    st.markdown('<div class="section-header">👥 Ringkasan Type Pax</div>', unsafe_allow_html=True)
+                    
+                    scan_adult = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("ADULT|ADT", na=False))])
+                    scan_child = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("CHILD|CHD", na=False))])
+                    scan_infant = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("INFANT|INF", na=False))])
+                    scan_transit = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("TRANSIT|TRNS", na=False))])
 
-                        mnf_adult = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("ADULT", na=False)])
-                        mnf_child = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("CHILD", na=False)])
-                        mnf_infant = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("INFANT", na=False)])
-                        mnf_transit = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("TRANSIT", na=False)])
+                    mnf_adult = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("ADULT", na=False)])
+                    mnf_child = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("CHILD", na=False)])
+                    mnf_infant = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("INFANT", na=False)])
+                    mnf_transit = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("TRANSIT", na=False)])
 
-                        pax_col1, pax_col2 = st.columns(2)
-                        
-                        # KOTAK 1: DATA SCAN
-                        with pax_col1:
-                            st.markdown('''
-                                <div class="pax-box">
-                                    <div class="pax-box-title">📲 KOTAK DATA SCAN</div>
-                                </div>
-                            ''', unsafe_allow_html=True)
-                            ps1, ps2, ps3, ps4 = st.columns(4)
-                            ps1.metric("👤 Adult Scan", f"{scan_adult}")
-                            ps2.metric("🧒 Child Scan", f"{scan_child}")
-                            ps3.metric("👶 Infant Scan", f"{scan_infant}")
-                            ps4.metric("🔄 Transit Scan", f"{scan_transit}")
+                    pax_col1, pax_col2 = st.columns(2)
+                    
+                    # KOTAK 1: DATA SCAN (ADULT, CHILD, INFANT, TRANSIT DI DALAM KOTAK SCAN)
+                    with pax_col1:
+                        st.markdown('<div class="pax-box-scan"><div class="pax-box-title-scan">📲 DATA SCAN</div>', unsafe_allow_html=True)
+                        ps1, ps2, ps3, ps4 = st.columns(4)
+                        ps1.metric("Adult Scan", f"{scan_adult}")
+                        ps2.metric("Child Scan", f"{scan_child}")
+                        ps3.metric("Infant Scan", f"{scan_infant}")
+                        ps4.metric("Transit Scan", f"{scan_transit}")
+                        st.markdown('</div>', unsafe_allow_html=True)
 
-                        # KOTAK 2: DATA MANIFEST
-                        with pax_col2:
-                            st.markdown('''
-                                <div class="pax-box">
-                                    <div class="pax-box-title" style="color: #a855f7;">📋 KOTAK DATA MANIFEST</div>
-                                </div>
-                            ''', unsafe_allow_html=True)
-                            pm1, pm2, pm3, pm4 = st.columns(4)
-                            pm1.metric("👤 Adult Mnf", f"{mnf_adult}")
-                            pm2.metric("🧒 Child Mnf", f"{mnf_child}")
-                            pm3.metric("👶 Infant Mnf", f"{mnf_infant}")
-                            pm4.metric("🔄 Transit Mnf", f"{mnf_transit}")
-
+                    # KOTAK 2: DATA MANIFEST (ADULT, CHILD, INFANT, TRANSIT DI DALAM KOTAK MANIFEST)
+                    with pax_col2:
+                        st.markdown('<div class="pax-box-manifest"><div class="pax-box-title-manifest">📋 DATA MANIFEST</div>', unsafe_allow_html=True)
+                        pm1, pm2, pm3, pm4 = st.columns(4)
+                        pm1.metric("Adult Mnf", f"{mnf_adult}")
+                        pm2.metric("Child Mnf", f"{mnf_child}")
+                        pm3.metric("Infant Mnf", f"{mnf_infant}")
+                        pm4.metric("Transit Mnf", f"{mnf_transit}")
                         st.markdown('</div>', unsafe_allow_html=True)
 
                     # ---------------------------------------------------------
-                    # 4. DETAIL PENCOCOKAN PENUMPANG (TABEL SCROLLABLE)
+                    # 4. DETAIL PENCOCOKAN PENUMPANG (TABEL UTAMA)
                     # ---------------------------------------------------------
                     col_t1, col_t2 = st.columns([3, 1])
                     with col_t1:
