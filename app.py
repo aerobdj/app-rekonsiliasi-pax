@@ -8,7 +8,6 @@ import io
 # -----------------------------------------------------------------------------
 # 1. KONFIGURASI HALAMAN & BRANDING INJOURNEY
 # -----------------------------------------------------------------------------
-# Menggunakan 1 Logo Original Resmi (Versi Grey)
 LOGO_GREY = "https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png"
 KAWUNG_ICON = "https://www.injourneyairports.id/assets/kawung-logo-side-CktPU2GK.png"
 
@@ -48,21 +47,24 @@ st.markdown("""
         background: transparent !important;
     }
 
-    /* CONTAINER LOGO HTML KUSTOM */
-    .sidebar-logo-container {
+    /* KARTU LOGO BACKGROUND PUTIH ROUNDED (KONTRAST AMAN DI DARK/LIGHT MODE) */
+    .sidebar-logo-card {
+        background-color: #ffffff !important;
+        border-radius: 12px;
+        padding: 10px 16px;
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 0px 0 10px 0;
-        margin-top: -15px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.12), 0 2px 4px -1px rgba(0, 0, 0, 0.08);
+        margin-top: -10px;
+        margin-bottom: 12px;
     }
     
-    /* LOGO ORIGINAL MURNI TANPA FILTER */
-    .brand-logo {
-        width: 170px;
+    .brand-logo-card {
+        width: 155px;
         height: auto;
-        margin-bottom: 6px;
+        display: block;
         filter: none !important;
     }
 
@@ -70,11 +72,11 @@ st.markdown("""
         display: flex;
         align-items: center;
         gap: 6px;
-        background-color: rgba(148, 163, 184, 0.15);
-        border: 1px solid rgba(148, 163, 184, 0.3);
+        background-color: #f1f5f9;
+        border: 1px solid #cbd5e1;
         border-radius: 20px;
         padding: 3px 10px;
-        margin-top: 4px;
+        margin-top: 6px;
     }
     .sidebar-mini-icon {
         width: 14px;
@@ -83,7 +85,7 @@ st.markdown("""
     .sidebar-mini-text {
         font-size: 11px;
         font-weight: 600;
-        color: #94a3b8;
+        color: #334155;
         letter-spacing: 0.5px;
     }
 
@@ -342,8 +344,8 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown(f"""
-        <div class="sidebar-logo-container">
-            <img src="{LOGO_GREY}" class="brand-logo" alt="InJourney Logo">
+        <div class="sidebar-logo-card">
+            <img src="{LOGO_GREY}" class="brand-logo-card" alt="InJourney Logo">
             <div class="sidebar-mini-badge">
                 <img src="{KAWUNG_ICON}" class="sidebar-mini-icon" alt="Kawung">
                 <span class="sidebar-mini-text">Pax Reconciliation System</span>
@@ -395,7 +397,11 @@ if menu == "📊 Rekonsiliasi Data":
             </div>
         """, unsafe_allow_html=True)
     with col_head2:
-        st.markdown(f'<img src="{LOGO_GREY}" class="brand-logo" alt="InJourney Logo">', unsafe_allow_html=True)
+        st.markdown(f'''
+            <div class="sidebar-logo-card" style="margin-top: 0; padding: 8px 12px;">
+                <img src="{LOGO_GREY}" class="brand-logo-card" style="width: 140px;" alt="InJourney Logo">
+            </div>
+        ''', unsafe_allow_html=True)
 
     if btn_proses:
         if not file_manifest or not file_tapping1 or (flight_mode == "Combine Flight" and not file_tapping2):
