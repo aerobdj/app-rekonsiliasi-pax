@@ -8,8 +8,8 @@ import io
 # -----------------------------------------------------------------------------
 # 1. KONFIGURASI HALAMAN & BRANDING INJOURNEY
 # -----------------------------------------------------------------------------
-LOGO_WHITE = "https://www.injourneyairports.id/assets/injourney-logo-white-Dl4T6LNj.png"
-LOGO_GREY = "https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png"
+LOGO_WHITE = "https://www.injourneyairports.id/assets/injourney-logo-white-Dl4T6LNj.png" # Mode Gelap
+LOGO_GREY = "https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png"   # Mode Terang
 KAWUNG_ICON = "https://www.injourneyairports.id/assets/kawung-logo-side-CktPU2GK.png"
 
 st.set_page_config(
@@ -58,26 +58,25 @@ st.markdown("""
         margin-top: -15px;
     }
     
-    /* ADAPTIF DUAL-MODE (DARK / LIGHT THEME AUTOMATIC SWITCH) */
     .sidebar-logo-img, .header-logo-img {
         width: 170px;
         height: auto;
         margin-bottom: 6px;
-        /* Menggunakan filter agar gambar beradaptasi jika background terang (Light Mode) */
-        filter: var(--logo-filter, none);
     }
 
-    /* CSS Variable untuk mengatur adaptasi warna logo pada Light Mode */
+    /* LOGIKA AUTO-SWITCH URL LOGO (DARK VS LIGHT MODE) */
+    /* Default (Dark Mode): Tampilkan Logo White, Sembunyikan Logo Grey */
+    .logo-light { display: none !important; }
+    .logo-dark { display: block !important; }
+
+    /* Ketika Tema Browser / Streamlit Menggunakan Light Mode */
     @media (prefers-color-scheme: light) {
-        .sidebar-logo-img, .header-logo-img {
-            filter: invert(1) brightness(0.2) !important;
-        }
+        .logo-light { display: block !important; }
+        .logo-dark { display: none !important; }
     }
     
-    /* Proteksi khusus jika di-override via Streamlit Settings Theme (Light) */
-    [data-theme="light"] .sidebar-logo-img, [data-theme="light"] .header-logo-img {
-        filter: invert(1) brightness(0.2) !important;
-    }
+    [data-theme="light"] .logo-light { display: block !important; }
+    [data-theme="light"] .logo-dark { display: none !important; }
 
     .sidebar-mini-badge {
         display: flex;
@@ -353,9 +352,11 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
 # 3. TAMPILAN SIDEBAR
 # -----------------------------------------------------------------------------
 with st.sidebar:
+    # Menggunakan Dua Gambar Logo Kustom (White untuk Dark Mode & Grey untuk Light Mode)
     st.markdown(f"""
         <div class="sidebar-logo-container">
-            <img src="{LOGO_WHITE}" class="sidebar-logo-img" alt="InJourney Logo">
+            <img src="{LOGO_WHITE}" class="sidebar-logo-img logo-dark" alt="InJourney Logo Dark">
+            <img src="{LOGO_GREY}" class="sidebar-logo-img logo-light" alt="InJourney Logo Light">
             <div class="sidebar-mini-badge">
                 <img src="{KAWUNG_ICON}" class="sidebar-mini-icon" alt="Kawung">
                 <span class="sidebar-mini-text">Pax Reconciliation System</span>
@@ -407,7 +408,10 @@ if menu == "📊 Rekonsiliasi Data":
             </div>
         """, unsafe_allow_html=True)
     with col_head2:
-        st.markdown(f'<img src="{LOGO_WHITE}" class="header-logo-img" alt="InJourney Logo">', unsafe_allow_html=True)
+        st.markdown(f'''
+            <img src="{LOGO_WHITE}" class="header-logo-img logo-dark" alt="InJourney Logo Dark">
+            <img src="{LOGO_GREY}" class="header-logo-img logo-light" alt="InJourney Logo Light">
+        ''', unsafe_allow_html=True)
 
     if btn_proses:
         if not file_manifest or not file_tapping1 or (flight_mode == "Combine Flight" and not file_tapping2):
