@@ -8,7 +8,6 @@ import io
 # -----------------------------------------------------------------------------
 # 1. KONFIGURASI HALAMAN & BRANDING INJOURNEY
 # -----------------------------------------------------------------------------
-# Menggunakan 1 Logo Utama (Versi Grey Asli)
 LOGO_GREY = "https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png"
 KAWUNG_ICON = "https://www.injourneyairports.id/assets/kawung-logo-side-CktPU2GK.png"
 
@@ -26,7 +25,7 @@ st.logo(
     size="large"
 )
 
-# Custom CSS
+# Custom CSS untuk Auto Dual-Mode Logo
 st.markdown("""
     <style>
     /* PADDING ATAS SIDEBAR */
@@ -58,26 +57,37 @@ st.markdown("""
         margin-top: -15px;
     }
     
+    /* DEFAULT (LIGHT MODE): Tampilkan warna asli logo grey tanpa filter */
     .single-logo {
         width: 170px;
         height: auto;
         margin-bottom: 6px;
-        transition: filter 0.3s ease;
+        filter: none !important;
+        transition: filter 0.2s ease-in-out;
     }
 
-    /* -------------------------------------------------------------------------
-       LOGIKA 1 LOGO DUAL-MODE:
-       - Mode Terang (Light): Menggunakan warna asli (Grey).
-       - Mode Gelap (Dark): Di-invert & brightness disesuaikan jadi PUTIH.
-    ------------------------------------------------------------------------- */
+    /* DARK MODE (Browser / Streamlit Theme): Paksa warna logo jadi PUTIH */
     @media (prefers-color-scheme: dark) {
         .single-logo {
             filter: brightness(0) invert(1) !important;
         }
     }
 
-    [data-theme="dark"] .single-logo {
+    [data-theme="dark"] .single-logo,
+    .stDark .single-logo {
         filter: brightness(0) invert(1) !important;
+    }
+
+    /* PAKSA RESET FILTER DI LIGHT MODE */
+    @media (prefers-color-scheme: light) {
+        .single-logo {
+            filter: none !important;
+        }
+    }
+
+    [data-theme="light"] .single-logo,
+    .stLight .single-logo {
+        filter: none !important;
     }
 
     .sidebar-mini-badge {
@@ -124,7 +134,7 @@ st.markdown("""
 
     /* WELCOME CARD */
     .welcome-card {
-        background: rgba(30, 41, 59, 0.4);
+        background: rgba(30, 41, 59, 0.1);
         border: 1px solid rgba(148, 163, 184, 0.3);
         border-radius: 12px;
         padding: 28px;
@@ -154,7 +164,7 @@ st.markdown("""
 
     /* METRIC CARDS */
     div[data-testid="stMetric"] {
-        background: rgba(30, 41, 59, 0.3);
+        background: rgba(30, 41, 59, 0.05);
         border: 1px solid rgba(148, 163, 184, 0.3);
         border-radius: 10px;
         padding: 16px;
