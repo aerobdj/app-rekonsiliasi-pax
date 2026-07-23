@@ -21,8 +21,8 @@ st.set_page_config(
 
 # Gunakan st.logo bawaan Streamlit untuk menangani switcher gambar secara native
 st.logo(
-    image=LOGO_WHITE,        # Ditampilkan saat Dark Mode
-    icon_image=KAWUNG_ICON,  # Ditampilkan saat Sidebar di-Hide
+    image=LOGO_GREY,
+    icon_image=KAWUNG_ICON,
 )
 
 # Custom CSS
@@ -52,23 +52,51 @@ st.markdown("""
         margin-bottom: 10px;
     }
     
-    .brand-logo {
-        width: 170px;
-        height: auto;
+    .brand-logo{
+        width:170px;
+        height:auto;
+        transition:0.25s ease;
+    }
+    
+    /* ---------- LIGHT MODE ---------- */
+    
+    html[data-theme="light"] .brand-logo,
+    body[class*="stLight"] .brand-logo{
+        filter:none;
+    }
+    
+    /* ---------- DARK MODE ---------- */
+    
+    html[data-theme="dark"] .brand-logo,
+    body[class*="stDark"] .brand-logo{
+        filter:brightness(0) invert(1);
+    }
+    
+    /* ---------- LOGO STREAMLIT ---------- */
+    
+    [data-testid="stSidebarHeader"] img{
+        max-height:45px !important;
+        width:auto !important;
+        transition:.25s ease;
+    }
+    
+    /* Light */
+    
+    html[data-theme="light"] [data-testid="stSidebarHeader"] img,
+    body[class*="stLight"] [data-testid="stSidebarHeader"] img{
+        filter:none;
+    }
+    
+    /* Dark */
+    
+    html[data-theme="dark"] [data-testid="stSidebarHeader"] img,
+    body[class*="stDark"] [data-testid="stSidebarHeader"] img{
+        filter:brightness(0) invert(1);
     }
 
     /* MENGGUNAKAN VARIABLE WARNA BAWAAN STREAMLIT UNTUK VISIBILITAS PASTI */
     /* Saat Light Mode: Background terang, logo di-invert ke warna abu-abu gelap */
     /* Saat Dark Mode: Background gelap, logo di-invert ke warna putih */
-    html[data-theme="light"] .brand-logo,
-    body[class*="stLight"] .brand-logo {
-        content: url("https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png") !important;
-    }
-
-    html[data-theme="dark"] .brand-logo,
-    body[class*="stDark"] .brand-logo {
-        content: url("https://www.injourneyairports.id/assets/injourney-logo-white-Dl4T6LNj.png") !important;
-    }
 
     .sidebar-mini-badge {
         display: flex;
