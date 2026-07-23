@@ -24,9 +24,10 @@ st.logo(
     size="large"
 )
 
-# Custom CSS
+# Custom CSS untuk Tampilan Card Modern & Rapi
 st.markdown("""
     <style>
+    /* PADDING SIDEBAR */
     section[data-testid="stSidebar"] > div:first-child {
         padding-top: 0.5rem !important;
     }
@@ -42,6 +43,7 @@ st.markdown("""
         background: transparent !important;
     }
 
+    /* SIDEBAR LOGO BADGE */
     .sidebar-logo-card {
         background-color: #ffffff !important;
         border-radius: 12px;
@@ -82,6 +84,7 @@ st.markdown("""
         letter-spacing: 0.5px;
     }
 
+    /* HEADER KONTEN UTAMA */
     .main-header-container {
         display: flex;
         align-items: center;
@@ -103,22 +106,44 @@ st.markdown("""
         margin-top: 4px;
     }
 
-    /* CARD STYLING FOR FLIGHT DETAILS & KPI */
-    .info-card {
+    /* KARTU DETAIL FLIGHT MODERN */
+    .flight-card {
         background: rgba(30, 41, 59, 0.05);
-        border: 1px solid rgba(148, 163, 184, 0.3);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-left: 4px solid #0284c7;
         border-radius: 10px;
-        padding: 16px;
-        margin-bottom: 16px;
+        padding: 14px 18px;
+        margin-bottom: 10px;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    
-    div[data-testid="stMetric"] {
-        background: rgba(30, 41, 59, 0.05);
-        border: 1px solid rgba(148, 163, 184, 0.3);
-        border-radius: 10px;
-        padding: 12px;
+    .flight-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+    .flight-card-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+    }
+    .flight-card-value {
+        font-size: 16px;
+        font-weight: 700;
+        color: #38bdf8;
     }
 
+    /* METRIC CARDS MODERAN */
+    div[data-testid="stMetric"] {
+        background: rgba(30, 41, 59, 0.05);
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 10px;
+        padding: 14px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+
+    /* PRIMARY BUTTON STYLING */
     div.stButton > button:first-child {
         background-color: #0284c7;
         color: white;
@@ -132,6 +157,16 @@ st.markdown("""
     div.stButton > button:first-child:hover {
         background-color: #0369a1;
         box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+    }
+    
+    .section-header {
+        font-size: 18px;
+        font-weight: 700;
+        margin-top: 10px;
+        margin-bottom: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -186,7 +221,6 @@ def load_tapping_file(uploaded_file):
     if df is not None and not df.empty:
         df.columns = [str(col).strip().upper() for col in df.columns]
         
-        # Ekstraksi otomatis Flight No dari Data Tapping jika ada
         for col in ["FLIGHT", "FLIGHT NO", "FLIGHT_NO", "FLIGHTNO", "NO FLIGHT"]:
             if col in df.columns:
                 val = str(df[col].dropna().iloc[0]).strip() if not df[col].dropna().empty else "-"
@@ -209,7 +243,6 @@ def parse_manifest_pdf(pdf_file, airline):
             if not text:
                 continue
             
-            # Deteksi No Flight & Tanggal dari Header Manifest
             if flight_no_mnf == "-":
                 fl_match = re.search(r"(?:FLIGHT|FLT|NO FLIGHT)\s*[:\.-]?\s*([A-Z0-9]{2,3}\s*\d{3,4})", text, re.IGNORECASE)
                 if fl_match:
@@ -229,7 +262,6 @@ def parse_manifest_pdf(pdf_file, airline):
                 pnr = pnr_match.group(1) if pnr_match else None
                 seat = seat_match.group(1) if seat_match else None
                 
-                # Deteksi Type Pax di Manifest
                 type_pax = "Adult"
                 if "CHD" in line or "CHILD" in line:
                     type_pax = "Child"
@@ -330,7 +362,6 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
         
     df_res = pd.DataFrame(results) if results else pd.DataFrame(columns=empty_columns)
     
-    # Menambahkan data Not Scan (Manifest Pax yang tidak di-scan)
     scanned_manifest_seats = df_res["SEAT MANIFEST"].tolist() if "SEAT MANIFEST" in df_res.columns else []
     no_show_list = []
     for idx, mnf in df_manifest.iterrows():
@@ -445,7 +476,6 @@ if menu == "📊 Rekonsiliasi Data":
                 else:
                     df_result = reconcile_engine(df_tapping, df_manifest, airline)
                     
-                    # Simpan Histori
                     st.session_state["history"].append({
                         "time": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "airline": airline,
@@ -455,30 +485,60 @@ if menu == "📊 Rekonsiliasi Data":
                     })
 
                     # ---------------------------------------------------------
-                    # A. DETAIL PENERBANGAN
+                    # A. DETAIL PENERBANGAN (MODERN CARDS)
                     # ---------------------------------------------------------
-                    st.markdown("### ✈️ Detail Penerbangan")
+                    st.markdown('<div class="section-header">✈️ Detail Penerbangan</div>', unsafe_allow_html=True)
                     
-                    d_col1, d_col2, d_col3 = st.columns(3)
-                    with d_col1:
-                        st.markdown(f"**1. Airline:** {airline}")
-                        st.markdown(f"**2. No Flight (Manifest):** {flight_no_mnf}")
-                    with d_col2:
-                        st.markdown(f"**3. Tanggal Manifest:** {flight_date_mnf}")
-                        st.markdown(f"**4. No Flight Scan 1:** {flight_scan1}")
-                    with d_col3:
-                        if flight_mode == "Combine Flight":
-                            st.markdown(f"**5. No Flight Scan 2:** {flight_scan2}")
-                        else:
-                            st.markdown("**5. No Flight Scan 2:** - *(Single Flight Mode)*")
-                        st.markdown(f"**6. No Flight Manifest:** {flight_no_mnf}")
+                    fc1, fc2, fc3, fc4, fc5, fc6 = st.columns(6)
+                    with fc1:
+                        st.markdown(f'''
+                            <div class="flight-card">
+                                <div class="flight-card-label">🏢 Airline</div>
+                                <div class="flight-card-value">{airline.split()[0]}</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                    with fc2:
+                        st.markdown(f'''
+                            <div class="flight-card">
+                                <div class="flight-card-label">📄 No Flight (Mnf)</div>
+                                <div class="flight-card-value">{flight_no_mnf}</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                    with fc3:
+                        st.markdown(f'''
+                            <div class="flight-card">
+                                <div class="flight-card-label">📅 Tanggal</div>
+                                <div class="flight-card-value">{flight_date_mnf}</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                    with fc4:
+                        st.markdown(f'''
+                            <div class="flight-card">
+                                <div class="flight-card-label">📲 No Flight Scan 1</div>
+                                <div class="flight-card-value">{flight_scan1}</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                    with fc5:
+                        st.markdown(f'''
+                            <div class="flight-card">
+                                <div class="flight-card-label">📲 No Flight Scan 2</div>
+                                <div class="flight-card-value">{flight_scan2}</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
+                    with fc6:
+                        st.markdown(f'''
+                            <div class="flight-card">
+                                <div class="flight-card-label">📌 No Flight Manifest</div>
+                                <div class="flight-card-value">{flight_no_mnf}</div>
+                            </div>
+                        ''', unsafe_allow_html=True)
                     
-                    st.divider()
+                    st.write("")
 
                     # ---------------------------------------------------------
                     # B. RINGKASAN HASIL REKONSILIASI (KPI INTERAKTIF)
                     # ---------------------------------------------------------
-                    st.markdown("### 📈 Ringkasan Hasil Rekonsiliasi")
+                    st.markdown('<div class="section-header">📈 Ringkasan Hasil Rekonsiliasi</div>', unsafe_allow_html=True)
                     
                     cnt_scan = len(df_result[df_result["NAMA SCAN"] != "-"])
                     cnt_manifest = len(df_manifest)
@@ -488,10 +548,9 @@ if menu == "📊 Rekonsiliasi Data":
                     cnt_not_scan = len(df_result[df_result["HASIL"].str.contains("NOT SCAN")])
 
                     r_col1, r_col2, r_col3, r_col4, r_col5, r_col6 = st.columns(6)
-                    r_col1.metric("Total Pax Scan", f"{cnt_scan} Pax")
-                    r_col2.metric("Total Pax Manifest", f"{cnt_manifest} Pax")
+                    r_col1.metric("📊 Total Pax Scan", f"{cnt_scan} Pax")
+                    r_col2.metric("📋 Total Pax Manifest", f"{cnt_manifest} Pax")
                     
-                    # Filter Interaktif via Tombol
                     if r_col3.button(f"🟢 Match\n({cnt_match})", use_container_width=True):
                         st.session_state["filter_status"] = "MATCH"
                     if r_col4.button(f"🔴 Offload\n({cnt_offload})", use_container_width=True):
@@ -504,11 +563,10 @@ if menu == "📊 Rekonsiliasi Data":
                     st.write("")
 
                     # ---------------------------------------------------------
-                    # C. RINGKASAN TYPE PAX
+                    # C. RINGKASAN TYPE PAX (CARD MODERN)
                     # ---------------------------------------------------------
-                    st.markdown("### 👥 Ringkasan Type Pax")
+                    st.markdown('<div class="section-header">👥 Ringkasan Type Pax</div>', unsafe_allow_html=True)
                     
-                    # Hitung Type Pax
                     scan_adult = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("ADULT|ADT", na=False))])
                     scan_child = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("CHILD|CHD", na=False))])
                     scan_infant = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("INFANT|INF", na=False))])
@@ -520,14 +578,14 @@ if menu == "📊 Rekonsiliasi Data":
                     mnf_transit = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("TRANSIT", na=False)])
 
                     t_col1, t_col2, t_col3, t_col4, t_col5, t_col6, t_col7, t_col8 = st.columns(8)
-                    t_col1.metric("Adult Scan", f"{scan_adult}")
-                    t_col2.metric("Child Scan", f"{scan_child}")
-                    t_col3.metric("Infant Scan", f"{scan_infant}")
-                    t_col4.metric("Transit Scan", f"{scan_transit}")
-                    t_col5.metric("Adult Manifest", f"{mnf_adult}")
-                    t_col6.metric("Child Manifest", f"{mnf_child}")
-                    t_col7.metric("Infant Manifest", f"{mnf_infant}")
-                    t_col8.metric("Transit Manifest", f"{mnf_transit}")
+                    t_col1.metric("👤 Adult Scan", f"{scan_adult}")
+                    t_col2.metric("🧒 Child Scan", f"{scan_child}")
+                    t_col3.metric("👶 Infant Scan", f"{scan_infant}")
+                    t_col4.metric("🔄 Transit Scan", f"{scan_transit}")
+                    t_col5.metric("👤 Adult Mnf", f"{mnf_adult}")
+                    t_col6.metric("🧒 Child Mnf", f"{mnf_child}")
+                    t_col7.metric("👶 Infant Mnf", f"{mnf_infant}")
+                    t_col8.metric("🔄 Transit Mnf", f"{mnf_transit}")
 
                     st.divider()
 
@@ -536,19 +594,17 @@ if menu == "📊 Rekonsiliasi Data":
                     # ---------------------------------------------------------
                     col_t1, col_t2 = st.columns([3, 1])
                     with col_t1:
-                        st.markdown(f"### 📋 Detail Pencocokan Penumpang *(Filter: {st.session_state['filter_status']})*")
+                        st.markdown(f'<div class="section-header">📋 Detail Pencocokan Penumpang <span style="font-size: 14px; font-weight: normal; color: #38bdf8;">(Filter: {st.session_state["filter_status"]})</span></div>', unsafe_allow_html=True)
                     with col_t2:
                         if st.button("🔄 Reset Filter Tabel", use_container_width=True):
                             st.session_state["filter_status"] = "ALL"
 
-                    # Penerapan Filter
                     df_display = df_result.copy()
                     if st.session_state["filter_status"] != "ALL":
                         df_display = df_display[df_display["HASIL"].str.contains(st.session_state["filter_status"])]
 
                     st.dataframe(df_display, use_container_width=True, height=450)
                     
-                    # Download Button
                     output = io.BytesIO()
                     with pd.ExcelWriter(output, engine="openpyxl") as writer:
                         df_result.to_excel(writer, index=False, sheet_name="Rekonsiliasi")
