@@ -165,11 +165,11 @@ st.markdown("""
     div[data-testid="stVerticalBlock"] > div:has(#sticky-flight-marker) {
         position: -webkit-sticky !important;
         position: sticky !important;
-        top: 0px !important;
+        top: 3.5rem !important;
         z-index: 999 !important;
         background-color: var(--background-color, inherit) !important;
         backdrop-filter: blur(8px);
-        padding-top: 10px !important;
+        padding-top: 14px !important;
         padding-bottom: 10px !important;
         border-bottom: 1px solid rgba(148, 163, 184, 0.2);
     }
