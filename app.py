@@ -8,8 +8,8 @@ import io
 # -----------------------------------------------------------------------------
 # 1. KONFIGURASI HALAMAN & BRANDING INJOURNEY
 # -----------------------------------------------------------------------------
-# Menggunakan Aset SVG/PNG Resmi
-LOGO_URL = "https://www.injourneyairports.id/assets/injourney-logo-white-Dl4T6LNj.png"
+# Menggunakan 1 Logo Utama (Versi Grey Asli)
+LOGO_GREY = "https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png"
 KAWUNG_ICON = "https://www.injourneyairports.id/assets/kawung-logo-side-CktPU2GK.png"
 
 st.set_page_config(
@@ -58,33 +58,26 @@ st.markdown("""
         margin-top: -15px;
     }
     
-    /* SOLUSI PASTI DUAL-MODE LOGO:
-       Di-bind langsung ke variabel warna teks bawaan Streamlit (--text-color).
-       - Saat Dark Mode: --text-color bernilai terang/putih -> Logo tampil Putih.
-       - Saat Light Mode: --text-color bernilai gelap/hitam -> Logo otomatis ber-Invert jadi Hitam/Gelap! */
-    .adaptive-logo {
+    .single-logo {
         width: 170px;
         height: auto;
         margin-bottom: 6px;
-        /* Filter pintar mengikuti tema Streamlit */
-        filter: drop-shadow(0px 0px 1px var(--text-color));
-    }
-    
-    /* Deteksi jika background terang, paksa warna logo jadi gelap */
-    .stApp[data-test-script-state="running"], section[data-testid="stSidebar"] {
-        color: var(--text-color);
+        transition: filter 0.3s ease;
     }
 
-    /* Khusus Tampilan Light Mode */
-    @media (prefers-color-scheme: light) {
-        .adaptive-logo {
-            filter: brightness(0) saturate(100%) invert(18%) sepia(18%) saturate(1450%) hue-rotate(182deg) brightness(94%) contrast(92%) !important;
+    /* -------------------------------------------------------------------------
+       LOGIKA 1 LOGO DUAL-MODE:
+       - Mode Terang (Light): Menggunakan warna asli (Grey).
+       - Mode Gelap (Dark): Di-invert & brightness disesuaikan jadi PUTIH.
+    ------------------------------------------------------------------------- */
+    @media (prefers-color-scheme: dark) {
+        .single-logo {
+            filter: brightness(0) invert(1) !important;
         }
     }
-    
-    /* Jika User Mengubah Setting Streamlit ke Light secara Manual */
-    [data-theme="light"] .adaptive-logo, .stLight .adaptive-logo {
-        filter: brightness(0) saturate(100%) invert(18%) sepia(18%) saturate(1450%) hue-rotate(182deg) brightness(94%) contrast(92%) !important;
+
+    [data-theme="dark"] .single-logo {
+        filter: brightness(0) invert(1) !important;
     }
 
     .sidebar-mini-badge {
@@ -363,7 +356,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
 with st.sidebar:
     st.markdown(f"""
         <div class="sidebar-logo-container">
-            <img src="{LOGO_URL}" class="adaptive-logo" alt="InJourney Logo">
+            <img src="{LOGO_GREY}" class="single-logo" alt="InJourney Logo">
             <div class="sidebar-mini-badge">
                 <img src="{KAWUNG_ICON}" class="sidebar-mini-icon" alt="Kawung">
                 <span class="sidebar-mini-text">Pax Reconciliation System</span>
@@ -415,7 +408,7 @@ if menu == "📊 Rekonsiliasi Data":
             </div>
         """, unsafe_allow_html=True)
     with col_head2:
-        st.markdown(f'<img src="{LOGO_URL}" class="adaptive-logo" alt="InJourney Logo">', unsafe_allow_html=True)
+        st.markdown(f'<img src="{LOGO_GREY}" class="single-logo" alt="InJourney Logo">', unsafe_allow_html=True)
 
     if btn_proses:
         if not file_manifest or not file_tapping1 or (flight_mode == "Combine Flight" and not file_tapping2):
