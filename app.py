@@ -19,48 +19,28 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Custom CSS untuk Tampilan Korporat & Elegan
+# MENDAFTARKAN LOGO DUAL:
+# - image: Tampil saat sidebar terbuka (Logo InJourney Putih)
+# - icon_image: Tampil saat sidebar di-HIDE / collapsed (Mini Logo Kawung)
+st.logo(
+    image=LOGO_WHITE,
+    icon_image=KAWUNG_ICON,
+    size="large"
+)
+
+# Custom CSS untuk mengatur Tampilan Logo & Mini Logo
 st.markdown("""
     <style>
-    /* PADDING ATAS SIDEBAR */
-    section[data-testid="stSidebar"] > div:first-child {
+    /* STYLING HEADER SIDEBAR SAAT EXPANDED & COLLAPSED */
+    [data-testid="stSidebarHeader"] {
         padding-top: 0.8rem !important;
+        padding-bottom: 0.5rem !important;
     }
-    div[data-testid="stSidebarUserContent"] {
-        padding-top: 0rem !important;
-    }
-
-    /* CONTAINER LOGO ATAS SIDEBAR */
-    .sidebar-logo-container {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        padding: 5px 0 10px 0;
-    }
-    .sidebar-logo-img {
-        width: 170px;
-        height: auto;
-        margin-bottom: 6px;
-    }
-    .sidebar-mini-badge {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        background-color: rgba(51, 65, 85, 0.4);
-        border: 1px solid #334155;
-        border-radius: 20px;
-        padding: 3px 10px;
-    }
-    .sidebar-mini-icon {
-        width: 14px;
-        height: 14px;
-    }
-    .sidebar-mini-text {
-        font-size: 11px;
-        font-weight: 600;
-        color: #94a3b8;
-        letter-spacing: 0.5px;
+    
+    /* Ukuran logo saat sidebar terbuka */
+    [data-testid="stSidebarHeader"] img {
+        max-height: 40px !important;
+        width: auto !important;
     }
 
     /* HEADER KONTEN UTAMA */
@@ -86,7 +66,7 @@ st.markdown("""
         margin-top: 4px;
     }
 
-    /* WELCOME CARD (EMPTY STATE) */
+    /* WELCOME CARD */
     .welcome-card {
         background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%);
         border: 1px solid #334155;
@@ -316,21 +296,9 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
     return df_res
 
 # -----------------------------------------------------------------------------
-# 3. TAMPILAN SIDEBAR (LOGOS UTAMA & MINI ICON KAWUNG KEMBALI DI SINI)
+# 3. TAMPILAN SIDEBAR
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    # MENAMPILKAN DOKUMEN LOGO UTAMA + MINI BADGE KAWUNG
-    st.markdown(f"""
-        <div class="sidebar-logo-container">
-            <img src="{LOGO_WHITE}" class="sidebar-logo-img" alt="InJourney Logo">
-            <div class="sidebar-mini-badge">
-                <img src="{KAWUNG_ICON}" class="sidebar-mini-icon" alt="Kawung">
-                <span class="sidebar-mini-text">Pax Reconciliation System</span>
-            </div>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    st.divider()
     menu = st.radio("Pilihan Menu:", ["📊 Rekonsiliasi Data", "📜 Histori Log"])
     st.divider()
 
@@ -363,7 +331,6 @@ if menu == "📊 Rekonsiliasi Data":
     # 4. TAMPILAN KONTEN UTAMA (MAIN CONTENT AREA)
     # -------------------------------------------------------------------------
     
-    # --- HEADER UTAMA ---
     col_head1, col_head2 = st.columns([3, 1])
     with col_head1:
         st.markdown("""
@@ -377,7 +344,6 @@ if menu == "📊 Rekonsiliasi Data":
     with col_head2:
         st.image(LOGO_WHITE, width=190)
 
-    # --- ISI KONTEN ---
     if btn_proses:
         if not file_manifest or not file_tapping1 or (flight_mode == "Combine Flight" and not file_tapping2):
             st.error("⚠️ Mohon lengkapi semua file upload di sidebar sebelah kiri sebelum memproses!")
@@ -435,7 +401,6 @@ if menu == "📊 Rekonsiliasi Data":
                     )
 
     else:
-        # --- WELCOME / EMPTY STATE CARD ---
         st.markdown("""
             <div class="welcome-card">
                 <div class="welcome-title">Selamat Datang di Passenger Reconciliation System InJourney Airports</div>
