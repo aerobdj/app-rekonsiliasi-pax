@@ -24,7 +24,7 @@ st.logo(
     size="large"
 )
 
-# Custom CSS untuk Tampilan Card Modern & Rapi
+# Custom CSS untuk Sticky Dashboard & Uniform Card Design
 st.markdown("""
     <style>
     /* PADDING SIDEBAR */
@@ -91,7 +91,7 @@ st.markdown("""
         justify-content: space-between;
         padding-bottom: 12px;
         border-bottom: 2px solid rgba(148, 163, 184, 0.3);
-        margin-bottom: 24px;
+        margin-bottom: 20px;
     }
     .main-title {
         font-family: 'Segoe UI', -apple-system, Roboto, sans-serif;
@@ -106,64 +106,85 @@ st.markdown("""
         margin-top: 4px;
     }
 
-    /* KARTU DETAIL FLIGHT MODERN */
-    .flight-card {
+    /* KARTU SERAGAM (CARD DESIGN UNIFORM) */
+    .custom-card {
         background: rgba(30, 41, 59, 0.05);
         border: 1px solid rgba(148, 163, 184, 0.25);
         border-left: 4px solid #0284c7;
         border-radius: 10px;
-        padding: 14px 18px;
+        padding: 12px 16px;
         margin-bottom: 10px;
         transition: transform 0.2s ease, box-shadow 0.2s ease;
     }
-    .flight-card:hover {
+    .custom-card:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
     }
-    .flight-card-label {
-        font-size: 12px;
+    .custom-card-label {
+        font-size: 11px;
         font-weight: 600;
         color: #94a3b8;
         text-transform: uppercase;
         letter-spacing: 0.5px;
         margin-bottom: 4px;
     }
-    .flight-card-value {
+    .custom-card-value {
         font-size: 16px;
         font-weight: 700;
         color: #38bdf8;
     }
 
-    /* METRIC CARDS MODERAN */
-    div[data-testid="stMetric"] {
-        background: rgba(30, 41, 59, 0.05);
+    /* KONTEN TYPE PAX CARD CONTAINER */
+    .pax-box {
+        background: rgba(30, 41, 59, 0.03);
         border: 1px solid rgba(148, 163, 184, 0.25);
         border-radius: 10px;
         padding: 14px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        margin-bottom: 10px;
+    }
+    .pax-box-title {
+        font-size: 14px;
+        font-weight: 700;
+        margin-bottom: 10px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+        color: #38bdf8;
     }
 
-    /* PRIMARY BUTTON STYLING */
-    div.stButton > button:first-child {
-        background-color: #0284c7;
-        color: white;
-        font-weight: 600;
-        border-radius: 8px;
-        border: none;
-        padding: 10px 24px;
-        width: 100%;
-        transition: all 0.3s ease;
+    /* TOMBOL FILTER METRIK BERGAYA CARD */
+    div.stButton > button {
+        background: rgba(30, 41, 59, 0.05) !important;
+        border: 1px solid rgba(148, 163, 184, 0.25) !important;
+        border-radius: 10px !important;
+        padding: 10px !important;
+        height: 100% !important;
+        text-align: center !important;
+        transition: all 0.2s ease !important;
     }
-    div.stButton > button:first-child:hover {
-        background-color: #0369a1;
-        box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+    div.stButton > button:hover {
+        border-color: #0284c7 !important;
+        background: rgba(2, 132, 199, 0.1) !important;
+        transform: translateY(-2px);
     }
-    
+
+    /* FREEZE / STICKY HEADER SECTION */
+    .sticky-header-zone {
+        position: -webkit-sticky;
+        position: sticky;
+        top: 0;
+        z-index: 99;
+        background-color: var(--background-color, #0f172a);
+        padding-top: 10px;
+        padding-bottom: 10px;
+        border-bottom: 2px solid rgba(148, 163, 184, 0.2);
+        margin-bottom: 15px;
+    }
+
     .section-header {
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 700;
-        margin-top: 10px;
-        margin-bottom: 12px;
+        margin-top: 6px;
+        margin-bottom: 10px;
         display: flex;
         align-items: center;
         gap: 8px;
@@ -236,6 +257,7 @@ def parse_manifest_pdf(pdf_file, airline):
     manifest_data = []
     flight_no_mnf = "-"
     flight_date_mnf = "-"
+    flight_route_mnf = "-"
     
     with pdfplumber.open(pdf_file) as pdf:
         for page in pdf.pages:
@@ -252,6 +274,16 @@ def parse_manifest_pdf(pdf_file, airline):
                 date_match = re.search(r"(?:DATE|TGL|TANGGAL)\s*[:\.-]?\s*(\d{1,2}[\/\-\s][A-Za-z0-9]{3,8}[\/\-\s]\d{2,4})", text, re.IGNORECASE)
                 if date_match:
                     flight_date_mnf = date_match.group(1).strip()
+
+            if flight_route_mnf == "-":
+                route_match = re.search(r"(?:SECTOR|SEKTOR|ROUTE|RUTE)\s*[:\.-]?\s*([A-Z]{3}\s*[\-\/]\s*[A-Z]{3})", text, re.IGNORECASE)
+                if route_match:
+                    flight_route_mnf = route_match.group(1).replace(" ", "").strip()
+                else:
+                    # Alternative route format (e.g. CGKBDJ or CGK-BDJ)
+                    alt_route = re.search(r"\b([A-Z]{3}[\-\/][A-Z]{3})\b", text)
+                    if alt_route:
+                        flight_route_mnf = alt_route.group(1).strip()
 
             lines = text.split("\n")
             for line in lines:
@@ -281,7 +313,7 @@ def parse_manifest_pdf(pdf_file, airline):
                             "type_manifest": type_pax
                         })
                         
-    return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf
+    return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
 
 def reconcile_engine(df_tapping, df_manifest, airline_name):
     empty_columns = [
@@ -430,7 +462,7 @@ if menu == "📊 Rekonsiliasi Data":
         btn_proses = st.button("🚀 MULAI REKONSILIASI", use_container_width=True)
 
     # -------------------------------------------------------------------------
-    # 4. TAMPILAN KONTEN UTAMA (MAIN CONTENT AREA)
+    # 4. TAMPILAN KONTEN UTAMA
     # -------------------------------------------------------------------------
     
     col_head1, col_head2 = st.columns([3, 1])
@@ -467,7 +499,7 @@ if menu == "📊 Rekonsiliasi Data":
                     df_tapping = df_tap1
                     flight_scan2 = "-"
                 
-                df_manifest, flight_no_mnf, flight_date_mnf = parse_manifest_pdf(file_manifest, airline)
+                df_manifest, flight_no_mnf, flight_date_mnf, flight_route_mnf = parse_manifest_pdf(file_manifest, airline)
                 
                 if df_tapping.empty:
                     st.error("❌ Proses dibatalkan karena data Tapping tidak berhasil terbaca/kosong.")
@@ -484,117 +516,157 @@ if menu == "📊 Rekonsiliasi Data":
                         "data": df_result
                     })
 
-                    # ---------------------------------------------------------
-                    # A. DETAIL PENERBANGAN (MODERN CARDS)
-                    # ---------------------------------------------------------
-                    st.markdown('<div class="section-header">✈️ Detail Penerbangan</div>', unsafe_allow_html=True)
-                    
-                    fc1, fc2, fc3, fc4, fc5, fc6 = st.columns(6)
-                    with fc1:
-                        st.markdown(f'''
-                            <div class="flight-card">
-                                <div class="flight-card-label">🏢 Airline</div>
-                                <div class="flight-card-value">{airline.split()[0]}</div>
-                            </div>
-                        ''', unsafe_allow_html=True)
-                    with fc2:
-                        st.markdown(f'''
-                            <div class="flight-card">
-                                <div class="flight-card-label">📄 No Flight (Mnf)</div>
-                                <div class="flight-card-value">{flight_no_mnf}</div>
-                            </div>
-                        ''', unsafe_allow_html=True)
-                    with fc3:
-                        st.markdown(f'''
-                            <div class="flight-card">
-                                <div class="flight-card-label">📅 Tanggal</div>
-                                <div class="flight-card-value">{flight_date_mnf}</div>
-                            </div>
-                        ''', unsafe_allow_html=True)
-                    with fc4:
-                        st.markdown(f'''
-                            <div class="flight-card">
-                                <div class="flight-card-label">📲 No Flight Scan 1</div>
-                                <div class="flight-card-value">{flight_scan1}</div>
-                            </div>
-                        ''', unsafe_allow_html=True)
-                    with fc5:
-                        st.markdown(f'''
-                            <div class="flight-card">
-                                <div class="flight-card-label">📲 No Flight Scan 2</div>
-                                <div class="flight-card-value">{flight_scan2}</div>
-                            </div>
-                        ''', unsafe_allow_html=True)
-                    with fc6:
-                        st.markdown(f'''
-                            <div class="flight-card">
-                                <div class="flight-card-label">📌 No Flight Manifest</div>
-                                <div class="flight-card-value">{flight_no_mnf}</div>
-                            </div>
-                        ''', unsafe_allow_html=True)
-                    
-                    st.write("")
+                    # =========================================================
+                    # FREEZE / STICKY CONTAINER FOR DASHBOARD HEADER
+                    # =========================================================
+                    with st.container():
+                        st.markdown('<div class="sticky-header-zone">', unsafe_allow_html=True)
+
+                        # -----------------------------------------------------
+                        # 1. DETAIL PENERBANGAN
+                        # -----------------------------------------------------
+                        st.markdown('<div class="section-header">✈️ Detail Penerbangan</div>', unsafe_allow_html=True)
+                        
+                        fc1, fc2, fc3, fc4, fc5, fc6, fc7 = st.columns(7)
+                        with fc1:
+                            st.markdown(f'''
+                                <div class="custom-card">
+                                    <div class="custom-card-label">🏢 Airline</div>
+                                    <div class="custom-card-value">{airline.split()[0]}</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                        with fc2:
+                            st.markdown(f'''
+                                <div class="custom-card">
+                                    <div class="custom-card-label">📄 No Flight</div>
+                                    <div class="custom-card-value">{flight_no_mnf}</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                        with fc3:
+                            st.markdown(f'''
+                                <div class="custom-card" style="border-left-color: #eab308;">
+                                    <div class="custom-card-label">📍 Rute</div>
+                                    <div class="custom-card-value">{flight_route_mnf}</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                        with fc4:
+                            st.markdown(f'''
+                                <div class="custom-card">
+                                    <div class="custom-card-label">📅 Tanggal</div>
+                                    <div class="custom-card-value">{flight_date_mnf}</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                        with fc5:
+                            st.markdown(f'''
+                                <div class="custom-card">
+                                    <div class="custom-card-label">📲 Scan 1</div>
+                                    <div class="custom-card-value">{flight_scan1}</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                        with fc6:
+                            st.markdown(f'''
+                                <div class="custom-card">
+                                    <div class="custom-card-label">📲 Scan 2</div>
+                                    <div class="custom-card-value">{flight_scan2}</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                        with fc7:
+                            st.markdown(f'''
+                                <div class="custom-card">
+                                    <div class="custom-card-label">📌 Manifest</div>
+                                    <div class="custom-card-value">{flight_no_mnf}</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+
+                        # -----------------------------------------------------
+                        # 2. RINGKASAN HASIL REKONSILIASI (CARD UNIFORM INTERAKSI)
+                        # -----------------------------------------------------
+                        st.markdown('<div class="section-header">📈 Ringkasan Hasil Rekonsiliasi</div>', unsafe_allow_html=True)
+                        
+                        cnt_scan = len(df_result[df_result["NAMA SCAN"] != "-"])
+                        cnt_manifest = len(df_manifest)
+                        cnt_match = len(df_result[df_result["HASIL"].str.contains("MATCH")])
+                        cnt_offload = len(df_result[df_result["HASIL"].str.contains("OFFLOAD")])
+                        cnt_seat_conflict = len(df_result[df_result["HASIL"].str.contains("SEAT CONFLICT")])
+                        cnt_not_scan = len(df_result[df_result["HASIL"].str.contains("NOT SCAN")])
+
+                        r_col1, r_col2, r_col3, r_col4, r_col5, r_col6 = st.columns(6)
+                        with r_col1:
+                            st.markdown(f'''
+                                <div class="custom-card" style="border-left-color: #38bdf8;">
+                                    <div class="custom-card-label">📊 Pax Scan</div>
+                                    <div class="custom-card-value">{cnt_scan} Pax</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                        with r_col2:
+                            st.markdown(f'''
+                                <div class="custom-card" style="border-left-color: #a855f7;">
+                                    <div class="custom-card-label">📋 Pax Manifest</div>
+                                    <div class="custom-card-value">{cnt_manifest} Pax</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                        
+                        # Tombol Seragam Bergaya Custom Card & Dapat Diklik Filter
+                        if r_col3.button(f"🟢 MATCH\n\n{cnt_match} Pax", use_container_width=True):
+                            st.session_state["filter_status"] = "MATCH"
+                        if r_col4.button(f"🔴 OFFLOAD\n\n{cnt_offload} Pax", use_container_width=True):
+                            st.session_state["filter_status"] = "OFFLOAD"
+                        if r_col5.button(f"🟠 SEAT CONFLICT\n\n{cnt_seat_conflict} Pax", use_container_width=True):
+                            st.session_state["filter_status"] = "SEAT CONFLICT"
+                        if r_col6.button(f"⚪ NOT SCAN\n\n{cnt_not_scan} Pax", use_container_width=True):
+                            st.session_state["filter_status"] = "NOT SCAN"
+
+                        # -----------------------------------------------------
+                        # 3. RINGKASAN TYPE PAX (DUAL KOTAK CARD SCAN VS MANIFEST)
+                        # -----------------------------------------------------
+                        st.markdown('<div class="section-header">👥 Ringkasan Type Pax</div>', unsafe_allow_html=True)
+                        
+                        scan_adult = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("ADULT|ADT", na=False))])
+                        scan_child = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("CHILD|CHD", na=False))])
+                        scan_infant = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("INFANT|INF", na=False))])
+                        scan_transit = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("TRANSIT|TRNS", na=False))])
+
+                        mnf_adult = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("ADULT", na=False)])
+                        mnf_child = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("CHILD", na=False)])
+                        mnf_infant = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("INFANT", na=False)])
+                        mnf_transit = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("TRANSIT", na=False)])
+
+                        pax_col1, pax_col2 = st.columns(2)
+                        
+                        # KOTAK 1: DATA SCAN
+                        with pax_col1:
+                            st.markdown('''
+                                <div class="pax-box">
+                                    <div class="pax-box-title">📲 KOTAK DATA SCAN</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                            ps1, ps2, ps3, ps4 = st.columns(4)
+                            ps1.metric("👤 Adult Scan", f"{scan_adult}")
+                            ps2.metric("🧒 Child Scan", f"{scan_child}")
+                            ps3.metric("👶 Infant Scan", f"{scan_infant}")
+                            ps4.metric("🔄 Transit Scan", f"{scan_transit}")
+
+                        # KOTAK 2: DATA MANIFEST
+                        with pax_col2:
+                            st.markdown('''
+                                <div class="pax-box">
+                                    <div class="pax-box-title" style="color: #a855f7;">📋 KOTAK DATA MANIFEST</div>
+                                </div>
+                            ''', unsafe_allow_html=True)
+                            pm1, pm2, pm3, pm4 = st.columns(4)
+                            pm1.metric("👤 Adult Mnf", f"{mnf_adult}")
+                            pm2.metric("🧒 Child Mnf", f"{mnf_child}")
+                            pm3.metric("👶 Infant Mnf", f"{mnf_infant}")
+                            pm4.metric("🔄 Transit Mnf", f"{mnf_transit}")
+
+                        st.markdown('</div>', unsafe_allow_html=True)
 
                     # ---------------------------------------------------------
-                    # B. RINGKASAN HASIL REKONSILIASI (KPI INTERAKTIF)
-                    # ---------------------------------------------------------
-                    st.markdown('<div class="section-header">📈 Ringkasan Hasil Rekonsiliasi</div>', unsafe_allow_html=True)
-                    
-                    cnt_scan = len(df_result[df_result["NAMA SCAN"] != "-"])
-                    cnt_manifest = len(df_manifest)
-                    cnt_match = len(df_result[df_result["HASIL"].str.contains("MATCH")])
-                    cnt_offload = len(df_result[df_result["HASIL"].str.contains("OFFLOAD")])
-                    cnt_seat_conflict = len(df_result[df_result["HASIL"].str.contains("SEAT CONFLICT")])
-                    cnt_not_scan = len(df_result[df_result["HASIL"].str.contains("NOT SCAN")])
-
-                    r_col1, r_col2, r_col3, r_col4, r_col5, r_col6 = st.columns(6)
-                    r_col1.metric("📊 Total Pax Scan", f"{cnt_scan} Pax")
-                    r_col2.metric("📋 Total Pax Manifest", f"{cnt_manifest} Pax")
-                    
-                    if r_col3.button(f"🟢 Match\n({cnt_match})", use_container_width=True):
-                        st.session_state["filter_status"] = "MATCH"
-                    if r_col4.button(f"🔴 Offload\n({cnt_offload})", use_container_width=True):
-                        st.session_state["filter_status"] = "OFFLOAD"
-                    if r_col5.button(f"🟠 Seat Conflict\n({cnt_seat_conflict})", use_container_width=True):
-                        st.session_state["filter_status"] = "SEAT CONFLICT"
-                    if r_col6.button(f"⚪ Not Scan\n({cnt_not_scan})", use_container_width=True):
-                        st.session_state["filter_status"] = "NOT SCAN"
-
-                    st.write("")
-
-                    # ---------------------------------------------------------
-                    # C. RINGKASAN TYPE PAX (CARD MODERN)
-                    # ---------------------------------------------------------
-                    st.markdown('<div class="section-header">👥 Ringkasan Type Pax</div>', unsafe_allow_html=True)
-                    
-                    scan_adult = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("ADULT|ADT", na=False))])
-                    scan_child = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("CHILD|CHD", na=False))])
-                    scan_infant = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("INFANT|INF", na=False))])
-                    scan_transit = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("TRANSIT|TRNS", na=False))])
-
-                    mnf_adult = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("ADULT", na=False)])
-                    mnf_child = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("CHILD", na=False)])
-                    mnf_infant = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("INFANT", na=False)])
-                    mnf_transit = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("TRANSIT", na=False)])
-
-                    t_col1, t_col2, t_col3, t_col4, t_col5, t_col6, t_col7, t_col8 = st.columns(8)
-                    t_col1.metric("👤 Adult Scan", f"{scan_adult}")
-                    t_col2.metric("🧒 Child Scan", f"{scan_child}")
-                    t_col3.metric("👶 Infant Scan", f"{scan_infant}")
-                    t_col4.metric("🔄 Transit Scan", f"{scan_transit}")
-                    t_col5.metric("👤 Adult Mnf", f"{mnf_adult}")
-                    t_col6.metric("🧒 Child Mnf", f"{mnf_child}")
-                    t_col7.metric("👶 Infant Mnf", f"{mnf_infant}")
-                    t_col8.metric("🔄 Transit Mnf", f"{mnf_transit}")
-
-                    st.divider()
-
-                    # ---------------------------------------------------------
-                    # D. DETAIL PENCOCOKAN PENUMPANG (TABEL UTAMA)
+                    # 4. DETAIL PENCOCOKAN PENUMPANG (TABEL SCROLLABLE)
                     # ---------------------------------------------------------
                     col_t1, col_t2 = st.columns([3, 1])
                     with col_t1:
-                        st.markdown(f'<div class="section-header">📋 Detail Pencocokan Penumpang <span style="font-size: 14px; font-weight: normal; color: #38bdf8;">(Filter: {st.session_state["filter_status"]})</span></div>', unsafe_allow_html=True)
+                        st.markdown(f'<div class="section-header">📋 Detail Pencocokan Penumpang <span style="font-size: 14px; font-weight: normal; color: #38bdf8;">(Filter Active: {st.session_state["filter_status"]})</span></div>', unsafe_allow_html=True)
                     with col_t2:
                         if st.button("🔄 Reset Filter Tabel", use_container_width=True):
                             st.session_state["filter_status"] = "ALL"
@@ -603,7 +675,7 @@ if menu == "📊 Rekonsiliasi Data":
                     if st.session_state["filter_status"] != "ALL":
                         df_display = df_display[df_display["HASIL"].str.contains(st.session_state["filter_status"])]
 
-                    st.dataframe(df_display, use_container_width=True, height=450)
+                    st.dataframe(df_display, use_container_width=True, height=500)
                     
                     output = io.BytesIO()
                     with pd.ExcelWriter(output, engine="openpyxl") as writer:
