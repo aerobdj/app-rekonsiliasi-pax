@@ -31,26 +31,33 @@ st.markdown("""
     <style>
     /* PADDING ATAS SIDEBAR */
     section[data-testid="stSidebar"] > div:first-child {
-        padding-top: 0.8rem !important;
+        padding-top: 0.5rem !important;
     }
     div[data-testid="stSidebarUserContent"] {
         padding-top: 0rem !important;
     }
 
-    /* TRIK HIDE/SHOW LOGO HEADER BAWAAN */
-    /* Saat sidebar TERBUKA -> Sembunyikan header st.logo bawaan agar HTML Kustom Anda yang tampil */
-    [data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
+    /* MENCEGAH TOMBOL HIDE (<<) HILANG: 
+       Hanya sembunyikan gambar bawaan st.logo saat sidebar terbuka, JANGAN sembunyikan tombol collapse */
+    [data-testid="stSidebar"] [data-testid="stSidebarHeader"] img {
         display: none !important;
     }
+    
+    /* Pastikan header container tetap fleksibel untuk menampung tombol hide */
+    [data-testid="stSidebarHeader"] {
+        padding-top: 0.5rem !important;
+        padding-bottom: 0rem !important;
+        background: transparent !important;
+    }
 
-    /* CONTAINER LOGO KUSTOM ANDA */
+    /* CONTAINER LOGO HTML KUSTOM ANDA */
     .sidebar-logo-container {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 5px 0 10px 0;
-        margin-top: -10px;
+        padding: 0px 0 10px 0;
+        margin-top: -15px;
     }
     .sidebar-logo-img {
         width: 170px;
@@ -330,10 +337,10 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
     return df_res
 
 # -----------------------------------------------------------------------------
-# 3. TAMPILAN SIDEBAR (MENGGUNAKAN HTML KUSTOM ANDA)
+# 3. TAMPILAN SIDEBAR
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    # MENGGUNAKAN HTML KUSTOM SESUAI KEINGINAN ANDA
+    # HTML Kustom Logo Anda
     st.markdown(f"""
         <div class="sidebar-logo-container">
             <img src="{LOGO_WHITE}" class="sidebar-logo-img" alt="InJourney Logo">
