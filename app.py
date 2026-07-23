@@ -19,28 +19,62 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# MENDAFTARKAN LOGO DUAL:
-# - image: Tampil saat sidebar terbuka (Logo InJourney Putih)
-# - icon_image: Tampil saat sidebar di-HIDE / collapsed (Mini Logo Kawung)
+# st.logo khusus untuk memunculkan Mini Logo Kawung saat sidebar DI-HIDE
 st.logo(
-    image=LOGO_WHITE,
+    image=KAWUNG_ICON,
     icon_image=KAWUNG_ICON,
     size="large"
 )
 
-# Custom CSS untuk mengatur Tampilan Logo & Mini Logo
+# Custom CSS
 st.markdown("""
     <style>
-    /* STYLING HEADER SIDEBAR SAAT EXPANDED & COLLAPSED */
-    [data-testid="stSidebarHeader"] {
+    /* PADDING ATAS SIDEBAR */
+    section[data-testid="stSidebar"] > div:first-child {
         padding-top: 0.8rem !important;
-        padding-bottom: 0.5rem !important;
     }
-    
-    /* Ukuran logo saat sidebar terbuka */
-    [data-testid="stSidebarHeader"] img {
-        max-height: 40px !important;
-        width: auto !important;
+    div[data-testid="stSidebarUserContent"] {
+        padding-top: 0rem !important;
+    }
+
+    /* TRIK HIDE/SHOW LOGO HEADER BAWAAN */
+    /* Saat sidebar TERBUKA -> Sembunyikan header st.logo bawaan agar HTML Kustom Anda yang tampil */
+    [data-testid="stSidebar"] [data-testid="stSidebarHeader"] {
+        display: none !important;
+    }
+
+    /* CONTAINER LOGO KUSTOM ANDA */
+    .sidebar-logo-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 5px 0 10px 0;
+        margin-top: -10px;
+    }
+    .sidebar-logo-img {
+        width: 170px;
+        height: auto;
+        margin-bottom: 6px;
+    }
+    .sidebar-mini-badge {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background-color: rgba(51, 65, 85, 0.4);
+        border: 1px solid #334155;
+        border-radius: 20px;
+        padding: 3px 10px;
+    }
+    .sidebar-mini-icon {
+        width: 14px;
+        height: 14px;
+    }
+    .sidebar-mini-text {
+        font-size: 11px;
+        font-weight: 600;
+        color: #94a3b8;
+        letter-spacing: 0.5px;
     }
 
     /* HEADER KONTEN UTAMA */
@@ -296,9 +330,21 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
     return df_res
 
 # -----------------------------------------------------------------------------
-# 3. TAMPILAN SIDEBAR
+# 3. TAMPILAN SIDEBAR (MENGGUNAKAN HTML KUSTOM ANDA)
 # -----------------------------------------------------------------------------
 with st.sidebar:
+    # MENGGUNAKAN HTML KUSTOM SESUAI KEINGINAN ANDA
+    st.markdown(f"""
+        <div class="sidebar-logo-container">
+            <img src="{LOGO_WHITE}" class="sidebar-logo-img" alt="InJourney Logo">
+            <div class="sidebar-mini-badge">
+                <img src="{KAWUNG_ICON}" class="sidebar-mini-icon" alt="Kawung">
+                <span class="sidebar-mini-text">Pax Reconciliation System</span>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    st.divider()
     menu = st.radio("Pilihan Menu:", ["📊 Rekonsiliasi Data", "📜 Histori Log"])
     st.divider()
 
