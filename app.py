@@ -24,9 +24,20 @@ st.logo(
     size="large"
 )
 
-# Custom CSS
+# Custom CSS termasuk pengaktifan Sticky Freeze yang aman untuk Light/Dark Mode
 st.markdown("""
     <style>
+    /* MENGATUR OVERFLOW PARENT AGAR STICKY BERHASIL DI STREAMLIT */
+    [data-testid="stAppViewContainer"] {
+        overflow: auto !important;
+    }
+    section.main {
+        overflow: visible !important;
+    }
+    [data-testid="stMainBlockContainer"] {
+        overflow: visible !important;
+    }
+
     /* PADDING SIDEBAR */
     section[data-testid="stSidebar"] > div:first-child {
         padding-top: 0.5rem !important;
@@ -148,6 +159,19 @@ st.markdown("""
         border-color: #0284c7 !important;
         background: rgba(2, 132, 199, 0.08) !important;
         transform: translateY(-2px);
+    }
+
+    /* FITUR FREEZE / STICKY KHUSUS BLOK DETAIL PENERBANGAN */
+    div[data-testid="stVerticalBlock"] > div:has(#sticky-flight-marker) {
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        top: 0px !important;
+        z-index: 999 !important;
+        background-color: var(--background-color, inherit) !important;
+        backdrop-filter: blur(8px);
+        padding-top: 10px !important;
+        padding-bottom: 10px !important;
+        border-bottom: 1px solid rgba(148, 163, 184, 0.2);
     }
 
     .section-header {
@@ -486,9 +510,10 @@ if menu == "📊 Rekonsiliasi Data":
                     })
 
                     # =========================================================
-                    # 1. DETAIL PENERBANGAN (DESAIN KARTU ROUNDED CLEAN)
+                    # 1. DETAIL PENERBANGAN (STICKY FREEZE DENGAN MARKER AMAN)
                     # =========================================================
-                    with st.container(border=True):
+                    with st.container():
+                        st.markdown('<div id="sticky-flight-marker"></div>', unsafe_allow_html=True)
                         st.markdown('<div class="section-header" style="margin-top:0;">✈️ Detail Penerbangan</div>', unsafe_allow_html=True)
                         
                         fc1, fc2, fc3, fc4, fc5, fc6, fc7 = st.columns(7)
