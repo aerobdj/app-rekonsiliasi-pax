@@ -8,8 +8,8 @@ import io
 # -----------------------------------------------------------------------------
 # 1. KONFIGURASI HALAMAN & BRANDING INJOURNEY
 # -----------------------------------------------------------------------------
-LOGO_WHITE = "https://www.injourneyairports.id/assets/injourney-logo-white-Dl4T6LNj.png" # Mode Gelap
-LOGO_GREY = "https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png"   # Mode Terang
+# Menggunakan Aset SVG/PNG Resmi
+LOGO_URL = "https://www.injourneyairports.id/assets/injourney-logo-white-Dl4T6LNj.png"
 KAWUNG_ICON = "https://www.injourneyairports.id/assets/kawung-logo-side-CktPU2GK.png"
 
 st.set_page_config(
@@ -58,25 +58,34 @@ st.markdown("""
         margin-top: -15px;
     }
     
-    .sidebar-logo-img, .header-logo-img {
+    /* SOLUSI PASTI DUAL-MODE LOGO:
+       Di-bind langsung ke variabel warna teks bawaan Streamlit (--text-color).
+       - Saat Dark Mode: --text-color bernilai terang/putih -> Logo tampil Putih.
+       - Saat Light Mode: --text-color bernilai gelap/hitam -> Logo otomatis ber-Invert jadi Hitam/Gelap! */
+    .adaptive-logo {
         width: 170px;
         height: auto;
         margin-bottom: 6px;
-    }
-
-    /* LOGIKA AUTO-SWITCH URL LOGO (DARK VS LIGHT MODE) */
-    /* Default (Dark Mode): Tampilkan Logo White, Sembunyikan Logo Grey */
-    .logo-light { display: none !important; }
-    .logo-dark { display: block !important; }
-
-    /* Ketika Tema Browser / Streamlit Menggunakan Light Mode */
-    @media (prefers-color-scheme: light) {
-        .logo-light { display: block !important; }
-        .logo-dark { display: none !important; }
+        /* Filter pintar mengikuti tema Streamlit */
+        filter: drop-shadow(0px 0px 1px var(--text-color));
     }
     
-    [data-theme="light"] .logo-light { display: block !important; }
-    [data-theme="light"] .logo-dark { display: none !important; }
+    /* Deteksi jika background terang, paksa warna logo jadi gelap */
+    .stApp[data-test-script-state="running"], section[data-testid="stSidebar"] {
+        color: var(--text-color);
+    }
+
+    /* Khusus Tampilan Light Mode */
+    @media (prefers-color-scheme: light) {
+        .adaptive-logo {
+            filter: brightness(0) saturate(100%) invert(18%) sepia(18%) saturate(1450%) hue-rotate(182deg) brightness(94%) contrast(92%) !important;
+        }
+    }
+    
+    /* Jika User Mengubah Setting Streamlit ke Light secara Manual */
+    [data-theme="light"] .adaptive-logo, .stLight .adaptive-logo {
+        filter: brightness(0) saturate(100%) invert(18%) sepia(18%) saturate(1450%) hue-rotate(182deg) brightness(94%) contrast(92%) !important;
+    }
 
     .sidebar-mini-badge {
         display: flex;
@@ -352,11 +361,9 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
 # 3. TAMPILAN SIDEBAR
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    # Menggunakan Dua Gambar Logo Kustom (White untuk Dark Mode & Grey untuk Light Mode)
     st.markdown(f"""
         <div class="sidebar-logo-container">
-            <img src="{LOGO_WHITE}" class="sidebar-logo-img logo-dark" alt="InJourney Logo Dark">
-            <img src="{LOGO_GREY}" class="sidebar-logo-img logo-light" alt="InJourney Logo Light">
+            <img src="{LOGO_URL}" class="adaptive-logo" alt="InJourney Logo">
             <div class="sidebar-mini-badge">
                 <img src="{KAWUNG_ICON}" class="sidebar-mini-icon" alt="Kawung">
                 <span class="sidebar-mini-text">Pax Reconciliation System</span>
@@ -408,10 +415,7 @@ if menu == "📊 Rekonsiliasi Data":
             </div>
         """, unsafe_allow_html=True)
     with col_head2:
-        st.markdown(f'''
-            <img src="{LOGO_WHITE}" class="header-logo-img logo-dark" alt="InJourney Logo Dark">
-            <img src="{LOGO_GREY}" class="header-logo-img logo-light" alt="InJourney Logo Light">
-        ''', unsafe_allow_html=True)
+        st.markdown(f'<img src="{LOGO_URL}" class="adaptive-logo" alt="InJourney Logo">', unsafe_allow_html=True)
 
     if btn_proses:
         if not file_manifest or not file_tapping1 or (flight_mode == "Combine Flight" and not file_tapping2):
