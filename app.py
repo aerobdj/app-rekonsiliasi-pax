@@ -8,7 +8,8 @@ import io
 # -----------------------------------------------------------------------------
 # 1. KONFIGURASI HALAMAN & BRANDING INJOURNEY
 # -----------------------------------------------------------------------------
-LOGO_GREY = "https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png"
+LOGO_WHITE = "https://www.injourneyairports.id/assets/injourney-logo-white-Dl4T6LNj.png" # Mode Gelap
+LOGO_GREY = "https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png"   # Mode Terang
 KAWUNG_ICON = "https://www.injourneyairports.id/assets/kawung-logo-side-CktPU2GK.png"
 
 st.set_page_config(
@@ -18,14 +19,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# st.logo khusus untuk memunculkan Mini Logo Kawung saat sidebar DI-HIDE
+# Gunakan st.logo bawaan Streamlit untuk menangani switcher gambar secara native
 st.logo(
-    image=KAWUNG_ICON,
-    icon_image=KAWUNG_ICON,
-    size="large"
+    image=LOGO_WHITE,        # Ditampilkan saat Dark Mode
+    icon_image=KAWUNG_ICON,  # Ditampilkan saat Sidebar di-Hide
 )
 
-# Custom CSS untuk Auto Dual-Mode Logo
+# Custom CSS
 st.markdown("""
     <style>
     /* PADDING ATAS SIDEBAR */
@@ -36,58 +36,38 @@ st.markdown("""
         padding-top: 0rem !important;
     }
 
-    /* MENCEGAH TOMBOL HIDE (<<) HILANG */
-    [data-testid="stSidebar"] [data-testid="stSidebarHeader"] img {
-        display: none !important;
-    }
-    
-    [data-testid="stSidebarHeader"] {
-        padding-top: 0.5rem !important;
-        padding-bottom: 0rem !important;
-        background: transparent !important;
+    /* KONTROL UKURAN LOGO STREAMLIT NATIVE */
+    [data-testid="stSidebarHeader"] img {
+        max-height: 45px !important;
+        width: auto !important;
     }
 
-    /* CONTAINER LOGO HTML KUSTOM */
-    .sidebar-logo-container {
+    /* STYLE LOGO KUSTOM DI KONTEN UTAMA & SIDEBAR */
+    .logo-container {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        padding: 0px 0 10px 0;
-        margin-top: -15px;
+        margin-top: -10px;
+        margin-bottom: 10px;
     }
     
-    /* DEFAULT (LIGHT MODE): Tampilkan warna asli logo grey tanpa filter */
-    .single-logo {
+    .brand-logo {
         width: 170px;
         height: auto;
-        margin-bottom: 6px;
-        filter: none !important;
-        transition: filter 0.2s ease-in-out;
     }
 
-    /* DARK MODE (Browser / Streamlit Theme): Paksa warna logo jadi PUTIH */
-    @media (prefers-color-scheme: dark) {
-        .single-logo {
-            filter: brightness(0) invert(1) !important;
-        }
+    /* MENGGUNAKAN VARIABLE WARNA BAWAAN STREAMLIT UNTUK VISIBILITAS PASTI */
+    /* Saat Light Mode: Background terang, logo di-invert ke warna abu-abu gelap */
+    /* Saat Dark Mode: Background gelap, logo di-invert ke warna putih */
+    html[data-theme="light"] .brand-logo,
+    body[class*="stLight"] .brand-logo {
+        content: url("https://www.injourneyairports.id/assets/injourney-logo-grey-BHunbWo1.png") !important;
     }
 
-    [data-theme="dark"] .single-logo,
-    .stDark .single-logo {
-        filter: brightness(0) invert(1) !important;
-    }
-
-    /* PAKSA RESET FILTER DI LIGHT MODE */
-    @media (prefers-color-scheme: light) {
-        .single-logo {
-            filter: none !important;
-        }
-    }
-
-    [data-theme="light"] .single-logo,
-    .stLight .single-logo {
-        filter: none !important;
+    html[data-theme="dark"] .brand-logo,
+    body[class*="stDark"] .brand-logo {
+        content: url("https://www.injourneyairports.id/assets/injourney-logo-white-Dl4T6LNj.png") !important;
     }
 
     .sidebar-mini-badge {
@@ -98,6 +78,7 @@ st.markdown("""
         border: 1px solid rgba(148, 163, 184, 0.3);
         border-radius: 20px;
         padding: 3px 10px;
+        margin-top: 6px;
     }
     .sidebar-mini-icon {
         width: 14px;
@@ -365,8 +346,8 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown(f"""
-        <div class="sidebar-logo-container">
-            <img src="{LOGO_GREY}" class="single-logo" alt="InJourney Logo">
+        <div class="logo-container">
+            <img src="{LOGO_WHITE}" class="brand-logo" alt="InJourney Logo">
             <div class="sidebar-mini-badge">
                 <img src="{KAWUNG_ICON}" class="sidebar-mini-icon" alt="Kawung">
                 <span class="sidebar-mini-text">Pax Reconciliation System</span>
@@ -418,7 +399,7 @@ if menu == "📊 Rekonsiliasi Data":
             </div>
         """, unsafe_allow_html=True)
     with col_head2:
-        st.markdown(f'<img src="{LOGO_GREY}" class="single-logo" alt="InJourney Logo">', unsafe_allow_html=True)
+        st.markdown(f'<img src="{LOGO_WHITE}" class="brand-logo" alt="InJourney Logo">', unsafe_allow_html=True)
 
     if btn_proses:
         if not file_manifest or not file_tapping1 or (flight_mode == "Combine Flight" and not file_tapping2):
