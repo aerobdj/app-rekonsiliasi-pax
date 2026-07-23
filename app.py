@@ -37,20 +37,18 @@ st.markdown("""
         padding-top: 0rem !important;
     }
 
-    /* MENCEGAH TOMBOL HIDE (<<) HILANG: 
-       Hanya sembunyikan gambar bawaan st.logo saat sidebar terbuka, JANGAN sembunyikan tombol collapse */
+    /* MENCEGAH TOMBOL HIDE (<<) HILANG */
     [data-testid="stSidebar"] [data-testid="stSidebarHeader"] img {
         display: none !important;
     }
     
-    /* Pastikan header container tetap fleksibel untuk menampung tombol hide */
     [data-testid="stSidebarHeader"] {
         padding-top: 0.5rem !important;
         padding-bottom: 0rem !important;
         background: transparent !important;
     }
 
-    /* CONTAINER LOGO HTML KUSTOM ANDA */
+    /* CONTAINER LOGO HTML KUSTOM */
     .sidebar-logo-container {
         display: flex;
         flex-direction: column;
@@ -59,17 +57,34 @@ st.markdown("""
         padding: 0px 0 10px 0;
         margin-top: -15px;
     }
-    .sidebar-logo-img {
+    
+    /* ADAPTIF DUAL-MODE (DARK / LIGHT THEME AUTOMATIC SWITCH) */
+    .sidebar-logo-img, .header-logo-img {
         width: 170px;
         height: auto;
         margin-bottom: 6px;
+        /* Menggunakan filter agar gambar beradaptasi jika background terang (Light Mode) */
+        filter: var(--logo-filter, none);
     }
+
+    /* CSS Variable untuk mengatur adaptasi warna logo pada Light Mode */
+    @media (prefers-color-scheme: light) {
+        .sidebar-logo-img, .header-logo-img {
+            filter: invert(1) brightness(0.2) !important;
+        }
+    }
+    
+    /* Proteksi khusus jika di-override via Streamlit Settings Theme (Light) */
+    [data-theme="light"] .sidebar-logo-img, [data-theme="light"] .header-logo-img {
+        filter: invert(1) brightness(0.2) !important;
+    }
+
     .sidebar-mini-badge {
         display: flex;
         align-items: center;
         gap: 6px;
-        background-color: rgba(51, 65, 85, 0.4);
-        border: 1px solid #334155;
+        background-color: rgba(148, 163, 184, 0.15);
+        border: 1px solid rgba(148, 163, 184, 0.3);
         border-radius: 20px;
         padding: 3px 10px;
     }
@@ -90,14 +105,13 @@ st.markdown("""
         align-items: center;
         justify-content: space-between;
         padding-bottom: 12px;
-        border-bottom: 2px solid #334155;
+        border-bottom: 2px solid rgba(148, 163, 184, 0.3);
         margin-bottom: 24px;
     }
     .main-title {
         font-family: 'Segoe UI', -apple-system, Roboto, sans-serif;
         font-weight: 700;
         font-size: 28px;
-        color: #f8fafc;
         margin: 0;
         letter-spacing: -0.5px;
     }
@@ -109,22 +123,21 @@ st.markdown("""
 
     /* WELCOME CARD */
     .welcome-card {
-        background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.8) 100%);
-        border: 1px solid #334155;
+        background: rgba(30, 41, 59, 0.4);
+        border: 1px solid rgba(148, 163, 184, 0.3);
         border-radius: 12px;
         padding: 28px;
         margin-top: 10px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
     }
     .welcome-title {
         font-size: 18px;
         font-weight: 600;
-        color: #38bdf8;
+        color: #0284c7;
         margin-bottom: 8px;
     }
     .welcome-text {
         font-size: 14px;
-        color: #cbd5e1;
         line-height: 1.6;
     }
     .step-badge {
@@ -140,11 +153,11 @@ st.markdown("""
 
     /* METRIC CARDS */
     div[data-testid="stMetric"] {
-        background: #1e293b;
-        border: 1px solid #334155;
+        background: rgba(30, 41, 59, 0.3);
+        border: 1px solid rgba(148, 163, 184, 0.3);
         border-radius: 10px;
         padding: 16px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
     }
     div[data-testid="stMetricLabel"] {
         font-size: 13px !important;
@@ -340,7 +353,6 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
 # 3. TAMPILAN SIDEBAR
 # -----------------------------------------------------------------------------
 with st.sidebar:
-    # HTML Kustom Logo Anda
     st.markdown(f"""
         <div class="sidebar-logo-container">
             <img src="{LOGO_WHITE}" class="sidebar-logo-img" alt="InJourney Logo">
@@ -395,7 +407,7 @@ if menu == "📊 Rekonsiliasi Data":
             </div>
         """, unsafe_allow_html=True)
     with col_head2:
-        st.image(LOGO_WHITE, width=190)
+        st.markdown(f'<img src="{LOGO_WHITE}" class="header-logo-img" alt="InJourney Logo">', unsafe_allow_html=True)
 
     if btn_proses:
         if not file_manifest or not file_tapping1 or (flight_mode == "Combine Flight" and not file_tapping2):
@@ -460,7 +472,7 @@ if menu == "📊 Rekonsiliasi Data":
                 <div class="welcome-text">
                     Sistem ini dirancang untuk mempermudah pencocokan data penyeberangan/keberangkatan penumpang antara data log <b>Gate Tapping</b> dan <b>Passenger Manifest PDF</b> secara presisi dan akurat.
                 </div>
-                <hr style="border: 0; border-top: 1px solid #334155; margin: 16px 0;">
+                <hr style="border: 0; border-top: 1px solid rgba(148, 163, 184, 0.3); margin: 16px 0;">
                 <div class="welcome-text">
                     <b>Panduan Penggunaan Singkat:</b><br>
                     <p style="margin-top: 8px; margin-bottom: 4px;"><span class="step-badge">1</span> Pilih maskapai penerbangan dan mode penerbangan di sidebar sebelah kiri.</p>
