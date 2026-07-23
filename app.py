@@ -631,38 +631,38 @@ if menu == "📊 Rekonsiliasi Data":
                     # 3. RINGKASAN TYPE PAX (KOTAK SCAN & KOTAK MANIFEST UTUH)
                     # ---------------------------------------------------------
                     st.markdown('<div class="section-header">👥 Ringkasan Type Pax</div>', unsafe_allow_html=True)
-                    
+
                     scan_adult = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("ADULT|ADT", na=False))])
                     scan_child = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("CHILD|CHD", na=False))])
                     scan_infant = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("INFANT|INF", na=False))])
                     scan_transit = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("TRANSIT|TRNS", na=False))])
-
+                    
                     mnf_adult = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("ADULT", na=False)])
                     mnf_child = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("CHILD", na=False)])
                     mnf_infant = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("INFANT", na=False)])
                     mnf_transit = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("TRANSIT", na=False)])
-
+                    
                     pax_col1, pax_col2 = st.columns(2)
                     
-                    # KOTAK 1: DATA SCAN (ADULT, CHILD, INFANT, TRANSIT DI DALAM KOTAK SCAN)
+                    # KOTAK 1: DATA SCAN
                     with pax_col1:
-                        st.markdown('<div class="pax-box-scan"><div class="pax-box-title-scan">📲 DATA SCAN</div>', unsafe_allow_html=True)
-                        ps1, ps2, ps3, ps4 = st.columns(4)
-                        ps1.metric("Adult Scan", f"{scan_adult}")
-                        ps2.metric("Child Scan", f"{scan_child}")
-                        ps3.metric("Infant Scan", f"{scan_infant}")
-                        ps4.metric("Transit Scan", f"{scan_transit}")
-                        st.markdown('</div>', unsafe_allow_html=True)
-
-                    # KOTAK 2: DATA MANIFEST (ADULT, CHILD, INFANT, TRANSIT DI DALAM KOTAK MANIFEST)
+                        with st.container(border=True):
+                            st.markdown('<div style="font-size: 14px; font-weight: 700; color: #38bdf8; margin-bottom: 8px;">📲 DATA SCAN</div>', unsafe_allow_html=True)
+                            ps1, ps2, ps3, ps4 = st.columns(4)
+                            ps1.metric("Adult Scan", f"{scan_adult}")
+                            ps2.metric("Child Scan", f"{scan_child}")
+                            ps3.metric("Infant Scan", f"{scan_infant}")
+                            ps4.metric("Transit Scan", f"{scan_transit}")
+                    
+                    # KOTAK 2: DATA MANIFEST
                     with pax_col2:
-                        st.markdown('<div class="pax-box-manifest"><div class="pax-box-title-manifest">📋 DATA MANIFEST</div>', unsafe_allow_html=True)
-                        pm1, pm2, pm3, pm4 = st.columns(4)
-                        pm1.metric("Adult Mnf", f"{mnf_adult}")
-                        pm2.metric("Child Mnf", f"{mnf_child}")
-                        pm3.metric("Infant Mnf", f"{mnf_infant}")
-                        pm4.metric("Transit Mnf", f"{mnf_transit}")
-                        st.markdown('</div>', unsafe_allow_html=True)
+                        with st.container(border=True):
+                            st.markdown('<div style="font-size: 14px; font-weight: 700; color: #a855f7; margin-bottom: 8px;">📋 DATA MANIFEST</div>', unsafe_allow_html=True)
+                            pm1, pm2, pm3, pm4 = st.columns(4)
+                            pm1.metric("Adult Mnf", f"{mnf_adult}")
+                            pm2.metric("Child Mnf", f"{mnf_child}")
+                            pm3.metric("Infant Mnf", f"{mnf_infant}")
+                            pm4.metric("Transit Mnf", f"{mnf_transit}")
 
                     # ---------------------------------------------------------
                     # 4. DETAIL PENCOCOKAN PENUMPANG (TABEL UTAMA)
