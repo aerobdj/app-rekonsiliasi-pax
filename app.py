@@ -27,6 +27,17 @@ st.logo(
 # Custom CSS
 st.markdown("""
     <style>
+    /* MENGATUR OVERFLOW PARENT AGAR STICKY/FREEZE BEKERJA DI STREAMLIT */
+    [data-testid="stAppViewContainer"] {
+        overflow: auto !important;
+    }
+    section.main {
+        overflow: visible !important;
+    }
+    [data-testid="stMainBlockContainer"] {
+        overflow: visible !important;
+    }
+
     /* PADDING SIDEBAR */
     section[data-testid="stSidebar"] > div:first-child {
         padding-top: 0.5rem !important;
@@ -106,7 +117,7 @@ st.markdown("""
         margin-top: 4px;
     }
 
-    /* KARTU SERAGAM (CARD DESIGN UNIFORM) */
+    /* KARTU SERAGAM */
     .custom-card {
         background: rgba(30, 41, 59, 0.05);
         border: 1px solid rgba(148, 163, 184, 0.25);
@@ -134,38 +145,6 @@ st.markdown("""
         color: #38bdf8;
     }
 
-    /* KONTEN TYPE PAX CARD CONTAINER UTUH */
-    .pax-box-scan {
-        background: rgba(2, 132, 199, 0.04);
-        border: 1px solid rgba(2, 132, 199, 0.25);
-        border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 12px;
-    }
-    .pax-box-manifest {
-        background: rgba(168, 85, 247, 0.04);
-        border: 1px solid rgba(168, 85, 247, 0.25);
-        border-radius: 12px;
-        padding: 16px;
-        margin-bottom: 12px;
-    }
-    .pax-box-title-scan {
-        font-size: 14px;
-        font-weight: 700;
-        color: #38bdf8;
-        margin-bottom: 12px;
-        padding-bottom: 4px;
-        border-bottom: 1px solid rgba(2, 132, 199, 0.2);
-    }
-    .pax-box-title-manifest {
-        font-size: 14px;
-        font-weight: 700;
-        color: #a855f7;
-        margin-bottom: 12px;
-        padding-bottom: 4px;
-        border-bottom: 1px solid rgba(168, 85, 247, 0.2);
-    }
-
     /* TOMBOL FILTER METRIK BERGAYA CARD */
     div.stButton > button {
         background: rgba(30, 41, 59, 0.05) !important;
@@ -182,16 +161,15 @@ st.markdown("""
         transform: translateY(-2px);
     }
 
-    /* FREEZE KHUSUS DETAIL PENERBANGAN SAJA */
+    /* STICKY / FREEZE UNTUK DETAIL PENERBANGAN (GARIS HITAM SUDAH DIHAPUS) */
     .sticky-flight-zone {
-        position: -webkit-sticky;
-        position: sticky;
-        top: 0;
-        z-index: 99;
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 999 !important;
         background-color: var(--background-color, #0f172a);
-        padding-top: 6px;
+        padding-top: 10px;
         padding-bottom: 10px;
-        border-bottom: 2px solid rgba(148, 163, 184, 0.2);
         margin-bottom: 16px;
     }
 
@@ -533,8 +511,11 @@ if menu == "📊 Rekonsiliasi Data":
                     # =========================================================
                     # 1. KHUSUS DETAIL PENERBANGAN YANG DI-FREEZE (STICKY)
                     # =========================================================
-                    st.markdown('<div class="sticky-flight-zone">', unsafe_allow_html=True)
-                    st.markdown('<div class="section-header">✈️ Detail Penerbangan</div>', unsafe_allow_html=True)
+                    st.markdown("""
+                        <div class="sticky-flight-zone">
+                            <div class="section-header">✈️ Detail Penerbangan</div>
+                        </div>
+                    """, unsafe_allow_html=True)
                     
                     fc1, fc2, fc3, fc4, fc5, fc6, fc7 = st.columns(7)
                     with fc1:
@@ -586,7 +567,6 @@ if menu == "📊 Rekonsiliasi Data":
                                 <div class="custom-card-value">{flight_no_mnf}</div>
                             </div>
                         ''', unsafe_allow_html=True)
-                    st.markdown('</div>', unsafe_allow_html=True)
 
                     # ---------------------------------------------------------
                     # 2. RINGKASAN HASIL REKONSILIASI
@@ -628,23 +608,23 @@ if menu == "📊 Rekonsiliasi Data":
                     st.write("")
 
                     # ---------------------------------------------------------
-                    # 3. RINGKASAN TYPE PAX (KOTAK SCAN & KOTAK MANIFEST UTUH)
+                    # 3. RINGKASAN TYPE PAX (MENGGUNAKAN CONTAINER BORDER STREAMLIT NATIVE)
                     # ---------------------------------------------------------
                     st.markdown('<div class="section-header">👥 Ringkasan Type Pax</div>', unsafe_allow_html=True)
-
+                    
                     scan_adult = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("ADULT|ADT", na=False))])
                     scan_child = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("CHILD|CHD", na=False))])
                     scan_infant = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("INFANT|INF", na=False))])
                     scan_transit = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("TRANSIT|TRNS", na=False))])
-                    
+
                     mnf_adult = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("ADULT", na=False)])
                     mnf_child = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("CHILD", na=False)])
                     mnf_infant = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("INFANT", na=False)])
                     mnf_transit = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("TRANSIT", na=False)])
-                    
+
                     pax_col1, pax_col2 = st.columns(2)
                     
-                    # KOTAK 1: DATA SCAN
+                    # KOTAK 1: DATA SCAN (100% DIDALAM KOTAK BORDER)
                     with pax_col1:
                         with st.container(border=True):
                             st.markdown('<div style="font-size: 14px; font-weight: 700; color: #38bdf8; margin-bottom: 8px;">📲 DATA SCAN</div>', unsafe_allow_html=True)
@@ -653,8 +633,8 @@ if menu == "📊 Rekonsiliasi Data":
                             ps2.metric("Child Scan", f"{scan_child}")
                             ps3.metric("Infant Scan", f"{scan_infant}")
                             ps4.metric("Transit Scan", f"{scan_transit}")
-                    
-                    # KOTAK 2: DATA MANIFEST
+
+                    # KOTAK 2: DATA MANIFEST (100% DIDALAM KOTAK BORDER)
                     with pax_col2:
                         with st.container(border=True):
                             st.markdown('<div style="font-size: 14px; font-weight: 700; color: #a855f7; margin-bottom: 8px;">📋 DATA MANIFEST</div>', unsafe_allow_html=True)
