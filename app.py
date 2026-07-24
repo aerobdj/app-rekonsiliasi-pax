@@ -191,13 +191,12 @@ if "filter_status" not in st.session_state:
     st.session_state["filter_status"] = "ALL"
 
 # -----------------------------------------------------------------------------
-# 2. CORE ENGINE & LOGIKA UTAMA REKONSILIASI
+# 2. HELPER & MODULAR PARSER SECTION (DITARUH DI ATAS AGAR TIDAK ERROR)
 # -----------------------------------------------------------------------------
 
 def load_tapping_file(uploaded_file):
     """
     Bagian: Pembacaan file Tapping (CSV / Excel / TXT)
-    Format kolom standar: Name, PNR, Flight, Flight Date, Seat, Type, Category, Scanned At, Scan Point
     """
     if uploaded_file is None:
         return pd.DataFrame(), "-"
@@ -241,9 +240,95 @@ def load_tapping_file(uploaded_file):
         st.error(f"⚠️ File **{uploaded_file.name}** tidak terbaca atau kosong.")
         return pd.DataFrame(), "-"
 
+def parse_manifest_lion_group(pdf_file):
+    """
+    Bagian: Modul Parser Khusus Manifest Lion Group (PDF atau TXT)
+    """
+    manifest_data = []
+    flight_no_mnf = "-"
+    flight_date_mnf = "-"
+    origin = "-"
+    destination = "-"
+    
+    full_text = ""
+    if hasattr(pdf_file, "name") and pdf_file.name.endswith(".txt"):
+        full_text = pdf_file.getvalue().decode("utf-8", errors="ignore")
+    else:
+        try:
+            with pdfplumber.open(pdf_file) as pdf:
+                for page in pdf.pages:
+                    text = page.extract_text()
+                    if text:
+                        full_text += text + "\n"
+        except Exception:
+            pdf_file.seek(0)
+            full_text = pdf_file.read().decode("utf-8", errors="ignore")
+
+    # 1. Ekstraksi Header Penerbangan
+    fl_match = re.search(r"FLIGHT\s*[:\.-]?\s*([A-Z0-9]{2,3}\s*\d{3,4})", full_text, re.IGNORECASE)
+    if fl_match:
+        flight_no_mnf = fl_match.group(1).strip()
+        
+    date_match = re.search(r"DATE\s*[:\.-]?\s*(\d{1,2}[A-Z]{3}\d{2})", full_text, re.IGNORECASE)
+    if date_match:
+        flight_date_mnf = date_match.group(1).strip()
+
+    emb_match = re.search(r"PT\.OF\s*EMBARKATION\s*[:\.-]?\s*([A-Z]{3})", full_text, re.IGNORECASE)
+    if emb_match:
+        origin = emb_match.group(1).strip()
+
+    dest_match = re.search(r"PT\.OF\s*DEST\s*[:\.-]?\s*([A-Z]{3})", full_text, re.IGNORECASE)
+    if dest_match:
+        destination = dest_match.group(1).strip()
+
+    flight_route_mnf = f"{origin}-{destination}" if origin != "-" and destination != "-" else "-"
+
+    # 2. Ekstraksi Data Penumpang Manifest
+    lines = full_text.split("\n")
+    for line in lines:
+        parts = line.split("/")
+        if len(parts) >= 8:
+            raw_name = parts[1].strip() if len(parts) > 1 else ""
+            clean_name = re.sub(r"[^A-Z\s]", "", raw_name).strip()
+            
+            seat = "-"
+            for part in parts:
+                if re.match(r"^[0-9]{1,2}[A-F]$", part.strip()):
+                    seat = part.strip()
+                    break
+
+            tkt_no = "NO_PNR_LION"
+            for part in parts:
+                part_clean = part.strip()
+                if part_clean.isdigit() and len(part_clean) >= 10:
+                    tkt_no = part_clean
+                    break
+
+            in_flt = parts[8].strip() if len(parts) > 8 else "..."
+            tr_org = parts[9].strip() if len(parts) > 9 else "..."
+            special_val = parts[-1].strip() if len(parts) > 0 else ""
+
+            type_pax = "Adult"
+            if "CHD" in special_val or "CHILD" in line.upper():
+                type_pax = "Child"
+            elif "INF" in special_val or "INFANT" in line.upper():
+                type_pax = "Infant"
+            elif (in_flt != "..." and in_flt != "") or (tr_org != "..." and tr_org != ""):
+                type_pax = "Transit"
+
+            if len(clean_name) > 2 and seat != "-":
+                manifest_data.append({
+                    "nama_manifest": clean_name,
+                    "seat_manifest": seat,
+                    "pnr_manifest": tkt_no,
+                    "type_manifest": type_pax
+                })
+
+    return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
+
 def reconcile_engine(df_tapping, df_manifest, airline_name):
     """
-    Bagian: Engine Pencocokan / Rekonsiliasi Utama antara Gate Tapping vs Manifest
+    Bagian: Engine Rekonsiliasi Utama
     """
     empty_columns = [
         "NO", "NAMA SCAN", "SEAT SCAN", "PNR SCAN", "TYPE SCAN",
@@ -257,7 +342,6 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
     no_counter = 1
     
     for idx, tap in df_tapping.iterrows():
-        # Mapping kolom dari format file Tapping baru
         tap_nama = str(tap.get("NAME", tap.get("NAMA", tap.get("PASSENGER NAME", "")))).strip()
         tap_seat = str(tap.get("SEAT", tap.get("NO SEAT", ""))).strip()
         tap_pnr = str(tap.get("PNR", tap.get("NO PNR", ""))).strip()
@@ -286,11 +370,6 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
             matched_type_manifest = mnf_type
             
             is_seat_same = (tap_seat == mnf_seat)
-            
-            # Untuk Lion Group, PNR di Tapping sering berupa PNR 6 digit, sedangkan manifest menggunakan No Ticket (13 digit).
-            # Jika PNR scan tidak sama dengan pnr_manifest, kita cek apakah pnr_manifest tersebut berupa nomor tiket (13 digit)
-            is_pnr_same = (tap_pnr == mnf_pnr) or (len(mnf_pnr) > 6 and tap_pnr != "")
-            
             pnr_note = " (Lion Group: Match via No Ticket)" if len(mnf_pnr) > 6 else ""
 
             if is_seat_same:
@@ -425,11 +504,10 @@ if menu == "📊 Rekonsiliasi Data":
                     df_tapping = df_tap1
                     flight_scan2 = "-"
                 
-                # Pemanggilan Parser Berdasarkan Maskapai yang Dipilih
+                # Pemanggilan Parser Manifest
                 if "LION" in airline.upper():
                     df_manifest, flight_no_mnf, flight_date_mnf, flight_route_mnf = parse_manifest_lion_group(file_manifest)
                 else:
-                    # Default / Fallback Parser jika maskapai lain dipilih
                     df_manifest, flight_no_mnf, flight_date_mnf, flight_route_mnf = parse_manifest_lion_group(file_manifest)
                 
                 if df_tapping.empty:
@@ -636,108 +714,3 @@ elif menu == "📜 Histori Log":
         for idx, item in enumerate(reversed(st.session_state["history"])):
             with st.expander(f"🕒 {item['time']} — {item['airline']} ({item['mode']}) — Total: {item['total_pax']} Pax"):
                 st.dataframe(item["data"], use_container_width=True)
-
-# =============================================================================
-# 5. MODULAR PARSER SECTION (TAMBAHKAN PARSER MASKAPAI LAIN DI BAWAH INI)
-# =============================================================================
-
-def parse_manifest_lion_group(pdf_file):
-    """
-    Bagian: Modul Parser Khusus Manifest Lion Group (PDF atau TXT)
-    Mengatur ekstraksi: Flight Number, Tanggal, Rute (ORIGIN-DESTINATION), Seat, PNR/No Ticket, dan Tipe Pax.
-    """
-    manifest_data = []
-    flight_no_mnf = "-"
-    flight_date_mnf = "-"
-    origin = "-"
-    destination = "-"
-    
-    full_text = ""
-    if hasattr(pdf_file, "name") and pdf_file.name.endswith(".txt"):
-        full_text = pdf_file.getvalue().decode("utf-8", errors="ignore")
-    else:
-        try:
-            with pdfplumber.open(pdf_file) as pdf:
-                for page in pdf.pages:
-                    text = page.extract_text()
-                    if text:
-                        full_text += text + "\n"
-        except Exception:
-            pdf_file.seek(0)
-            full_text = pdf_file.read().decode("utf-8", errors="ignore")
-
-    # 1. Ekstraksi Informasi Penerbangan Header
-    fl_match = re.search(r"FLIGHT\s*[:\.-]?\s*([A-Z0-9]{2,3}\s*\d{3,4})", full_text, re.IGNORECASE)
-    if fl_match:
-        flight_no_mnf = fl_match.group(1).strip()
-        
-    date_match = re.search(r"DATE\s*[:\.-]?\s*(\d{1,2}[A-Z]{3}\d{2})", full_text, re.IGNORECASE)
-    if date_match:
-        flight_date_mnf = date_match.group(1).strip()
-
-    emb_match = re.search(r"PT\.OF\s*EMBARKATION\s*[:\.-]?\s*([A-Z]{3})", full_text, re.IGNORECASE)
-    if emb_match:
-        origin = emb_match.group(1).strip()
-
-    dest_match = re.search(r"PT\.OF\s*DEST\s*[:\.-]?\s*([A-Z]{3})", full_text, re.IGNORECASE)
-    if dest_match:
-        destination = dest_match.group(1).strip()
-
-    flight_route_mnf = f"{origin}-{destination}" if origin != "-" and destination != "-" else "-"
-
-    # 2. Ekstraksi Baris Data Penumpang Manifest Lion Group
-    lines = full_text.split("\n")
-    for line in lines:
-        # Pola baris manifes Lion Group: No, Nama, Title, Seat, Bags, ..., TIKET#, IN.FLT, TR.ORG, ..., SPECIAL
-        # Contoh: 003 CAI/FAXIN MR./M./12A/..1/....12/216568/9902144430494/IU00628/CGK/......./.../....
-        parts = line.split("/")
-        if len(parts) >= 8:
-            raw_name = parts[1].strip() if len(parts) > 1 else ""
-            clean_name = re.sub(r"[^A-Z\s]", "", raw_name).strip()
-            
-            # Cek seat (biasanya berupa format angka diikuti huruf, misal 17D, 12A)
-            seat = "-"
-            for part in parts:
-                if re.match(r"^[0-9]{1,2}[A-F]$", part.strip()):
-                    seat = part.strip()
-                    break
-
-            # Cek No Ticket / PNR (kolom TKT# atau angka 13 digit)
-            tkt_no = "NO_PNR_LION"
-            for part in parts:
-                part_clean = part.strip()
-                if part_clean.isdigit() and len(part_clean) >= 10:
-                    tkt_no = part_clean
-                    break
-
-            # Cek IN.FLT (kolom penerbangan lanjutan)
-            in_flt = "..."
-            if len(parts) > 8:
-                in_flt = parts[8].strip()
-
-            # Cek TR.ORG (transit origin)
-            tr_org = "..."
-            if len(parts) > 9:
-                tr_org = parts[9].strip()
-
-            # Cek SPECIAL (kolom terakhir untuk CHD / INF)
-            special_val = parts[-1].strip() if len(parts) > 0 else ""
-
-            # Penentuan Tipe Pax Berdasarkan Aturan Khusus Lion Group
-            type_pax = "Adult"
-            if "CHD" in special_val or "CHILD" in line.upper():
-                type_pax = "Child"
-            elif "INF" in special_val or "INFANT" in line.upper():
-                type_pax = "Infant"
-            elif (in_flt != "..." and in_flt != "") or (tr_org != "..." and tr_org != ""):
-                type_pax = "Transit"
-
-            if len(clean_name) > 2 and seat != "-":
-                manifest_data.append({
-                    "nama_manifest": clean_name,
-                    "seat_manifest": seat,
-                    "pnr_manifest": tkt_no,
-                    "type_manifest": type_pax
-                })
-
-    return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
