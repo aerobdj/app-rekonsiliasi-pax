@@ -499,7 +499,7 @@ def parse_manifest_citilink(pdf_file):
     return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
 
 # -----------------------------------------------------------------------------
-# PARSER 3: GARUDA INDONESIA (GA) - ANCHOR PATTERN STRATEGY
+# PARSER 3: GARUDA INDONESIA (GA) - PENYEMPURNAAN BINTANG & SEAT ANCHOR
 # -----------------------------------------------------------------------------
 
 def parse_manifest_garuda(pdf_file):
@@ -523,6 +523,7 @@ def parse_manifest_garuda(pdf_file):
             pdf_file.seek(0)
             full_text = pdf_file.read().decode("utf-8", errors="ignore")
 
+    # Header Extraction
     fl_match = re.search(r"(GA\d{3,4})\s+(\d{1,2}[A-Z]{3})\s+([A-Z]{3})", full_text, re.IGNORECASE)
     if fl_match:
         flight_no_mnf = fl_match.group(1).upper()
@@ -539,13 +540,16 @@ def parse_manifest_garuda(pdf_file):
     lines = full_text.split("\n")
     for line in lines:
         line_str = line.strip()
-        if not line_str or line_str.startswith("Generic Report") or line_str.startswith("Report content"):
+        
+        # PERBAIKAN 1: Buang karakter bintang (*) di awal baris
+        line_clean = re.sub(r"^[\*\s]+", "", line_str)
+        
+        if not line_clean or line_clean.startswith("Generic Report") or line_clean.startswith("Report content"):
             continue
 
-        # REGEX ANCHOR PATTERN TERBARU:
-        # Menolak pengaruh panjangnya kode kelas (1, 2, atau 3+ char) dengan cara mencari B/N + Kursi dari belakang
+        # Regex yang tahan karakter pengganggu
         pattern = r"^\d+\.\s*([A-Za-z\/\s\.-]+?)\s+(?:([M|F|C|I])\s+)?([A-Z]{3})\s+([A-Z]{3})\s+[A-Z0-9]{1,4}\s+([B|N])\s*(\d{2,3}[A-Z]|\d{3})?\s*(\d{13})?"
-        match = re.search(pattern, line_str)
+        match = re.search(pattern, line_clean)
         
         if match:
             raw_name = match.group(1).strip()
@@ -577,9 +581,9 @@ def parse_manifest_garuda(pdf_file):
                 })
 
     return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
-
+    
 # -----------------------------------------------------------------------------
-# 3. RECONCILE ENGINE DENGAN LOGIKA BEBAS DOMINO CONFLICT
+# RECONCILE ENGINE PERBAIKAN SEAT PRIORITY
 # -----------------------------------------------------------------------------
 
 def reconcile_engine(df_tapping, df_manifest, airline_name):
@@ -634,7 +638,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
         
         available_manifest = df_manifest[~df_manifest["is_matched"]]
         
-        # STRATEGI 1: PNR SAMA / NO TIKET SAMA + SEAT SAMA ATAU NAMA COCOK
+        # STRATEGI 1: PNR / NO TIKET SAMA + SEAT/NAMA COCOK
         if len(tap_pnr) >= 5 and tap_pnr != "NO_PNR_CITILINK" and tap_pnr != "-" and not available_manifest.empty:
             pnr_matches = available_manifest[available_manifest["pnr_manifest"] == tap_pnr]
             if not pnr_matches.empty:
@@ -652,27 +656,20 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
                         s2 = fuzz.ratio(tap_nama_no_space, m_no_space)
                         max_s = max(s1, s2)
                         
-                        if max_s > best_pnr_score and max_s >= 60:
+                        if max_s > best_pnr_score and max_s >= 50:
                             best_pnr_score = max_s
                             best_pnr_idx = m_idx
                     if best_pnr_idx is not None:
                         matched_idx = best_pnr_idx
 
-        # STRATEGI 2: SEAT SAMA + FUZZY NAMA (Minimal 50% Kemiripan jika Seat SAMA Persis)
+        # STRATEGI 2: SEAT SAMA PERSIS (Prioritas Utama untuk Rombongan / Nama Mirip)
         if matched_idx is None and tap_seat != "-" and not available_manifest.empty:
             same_seat_rows = available_manifest[available_manifest["seat_manifest"] == tap_seat]
-            for m_idx, m_row in same_seat_rows.iterrows():
-                m_clean = m_row["clean_nama_manifest"]
-                m_no_space = m_clean.replace(" ", "")
-                
-                score = fuzz.token_set_ratio(tap_nama_clean, m_clean)
-                score_no_space = fuzz.ratio(tap_nama_no_space, m_no_space)
-                
-                if score >= 50 or score_no_space >= 50 or (tap_nama_no_space in m_no_space) or (m_no_space in tap_nama_no_space):
-                    matched_idx = m_idx
-                    break
+            if not same_seat_rows.empty:
+                # Ambil baris yang kursi-nya sama persis
+                matched_idx = same_seat_rows.index[0]
 
-        # STRATEGI 3: FUZZY NAME MATCH SANGAT KETAT (Minimal 75% untuk beda seat agar tidak merebut nama lain)
+        # STRATEGI 3: FUZZY NAME MATCH SANGAT KETAT (Minimal 75% jika beda seat)
         if matched_idx is None and not available_manifest.empty:
             best_score = 0
             best_m_idx = None
