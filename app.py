@@ -192,32 +192,23 @@ if "reconcile_done" not in st.session_state:
 
 def clean_passenger_name(name):
     """
-    Menghapus Gelar (MR, MRS, MS, MSTR, MISS) dan kata sambung seperti XINGCHAOMR -> XING CHAO
+    Pembersihan Gelar Penumpang (MR, MRS, MS, MSTR, MISS) dan Karakter Pengganggu
     """
     if not name or name == "-":
         return ""
     name = str(name).upper().replace("/", " ")
-    
-    # Pisahkan kata sambung berdempetan dengan MR/MRS/MS
     name = re.sub(r"([A-Z]+)(MR|MRS|MS|MSTR|MISS)\b", r"\1 ", name)
-    
-    # Hapus Gelar Penumpang Mandiri
     titles = [r"\bMR\b", r"\bMRS\b", r"\bMS\b", r"\bMSTR\b", r"\bMISS\b", r"\bMR\.\b", r"\bMRS\.\b", r"\bMS\.\b"]
     for t in titles:
         name = re.sub(t, "", name)
-        
     name = re.sub(r"[^A-Z\s]", "", name)
     return " ".join(name.split())
 
 def determine_pax_type(type_val, is_transit=False):
     """
-    Aturan Format Tipe Penumpang:
-    a. Adult + Transit  = Adult (Transit)
-    b. Child + Transit  = Child (Transit)
-    c. Infant + Transit = Infant (Transit)
+    Penentuan Format Tipe Penumpang
     """
     t = str(type_val).strip().upper()
-
     if "INFANT" in t or "INF" in t:
         return "Infant (Transit)" if is_transit else "Infant"
     elif "CHILD" in t or "CHD" in t:
@@ -298,7 +289,6 @@ def parse_manifest_lion_group(pdf_file):
             pdf_file.seek(0)
             full_text = pdf_file.read().decode("utf-8", errors="ignore")
 
-    # Header parsing
     fl_match = re.search(r"FLIGHT\s*[:\.-]?\s*([A-Z0-9]{2,3}\s*\d{3,4})", full_text, re.IGNORECASE)
     if fl_match:
         flight_no_mnf = fl_match.group(1).strip()
@@ -317,7 +307,6 @@ def parse_manifest_lion_group(pdf_file):
 
     flight_route_mnf = f"{origin}-{destination}" if origin != "-" and destination != "-" else "-"
 
-    # Data Penumpang parsing
     lines = full_text.split("\n")
     for line in lines:
         parts = line.split("/")
@@ -326,7 +315,6 @@ def parse_manifest_lion_group(pdf_file):
             fname = parts[1].strip() if len(parts) > 1 else ""
             raw_full_name = f"{fname} {lname}".strip()
             
-            # CEK FITUR DETEKSI BARIS HEADER SAMPAH (FNAME LNAME, TYPE, SEAT)
             if "FNAME" in fname.upper() or "LNAME" in lname.upper() or "TYPE" in line.upper():
                 continue
 
@@ -350,7 +338,6 @@ def parse_manifest_lion_group(pdf_file):
             tr_org = parts[9].strip() if len(parts) > 9 else "..."
             special_val = parts[-1].strip() if len(parts) > 0 else ""
 
-            # LOGIKA PENENTUAN TRANSIT MANIFEST
             is_in_flt_valid = (in_flt != "..." and not re.match(r"^\.+$", in_flt) and in_flt != "")
             is_tr_org_valid = (tr_org != "..." and not re.match(r"^\.+$", tr_org) and tr_org != "")
             is_transit = is_in_flt_valid or is_tr_org_valid
@@ -376,7 +363,7 @@ def parse_manifest_lion_group(pdf_file):
     return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
 
 # -----------------------------------------------------------------------------
-# 3. RECONCILE ENGINE DENGAN MULTI-LEVEL MATCHING & LOCKING
+# 3. RECONCILE ENGINE DENGAN PRESISI TINGGI & HANDLING SEAT INF
 # -----------------------------------------------------------------------------
 
 def reconcile_engine(df_tapping, df_manifest, airline_name):
@@ -403,7 +390,6 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
         
         is_transit = "TRANSIT" in raw_cat.upper() or "TRANSIT" in raw_type.upper()
         tap_type_final = determine_pax_type(raw_type, is_transit)
-        
         tap_nama_clean = clean_passenger_name(tap_nama_raw)
         
         status = ""
@@ -412,22 +398,22 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
         
         available_manifest = df_manifest[~df_manifest["is_matched"]]
         
-        # STRATEGI 1: Match Presisi via SEAT + FUZZY NAMA
+        # STRATEGI 1: Match Presisi via SEAT SAMA + FUZZY NAMA (Min. 70% Kemiripan)
         if tap_seat != "-" and tap_seat != "INF" and not available_manifest.empty:
             same_seat_rows = available_manifest[available_manifest["seat_manifest"] == tap_seat]
             for m_idx, m_row in same_seat_rows.iterrows():
                 score = fuzz.token_set_ratio(tap_nama_clean, m_row["clean_nama_manifest"])
-                if score >= 55:
+                if score >= 70:
                     matched_idx = m_idx
                     break
         
-        # STRATEGI 2: Fuzzy Name Match Keseluruhan
+        # STRATEGI 2: Fuzzy Name Match Keseluruhan (Minimal 72% Kemiripan)
         if matched_idx is None and not available_manifest.empty:
             best_score = 0
             best_m_idx = None
             for m_idx, m_row in available_manifest.iterrows():
                 score = fuzz.token_set_ratio(tap_nama_clean, m_row["clean_nama_manifest"])
-                if score > best_score and score >= 60:
+                if score > best_score and score >= 72:
                     best_score = score
                     best_m_idx = m_idx
             if best_m_idx is not None:
@@ -444,7 +430,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
             mnf_type = match_row["type_manifest"]
             
             is_seat_same = (tap_seat == mnf_seat) or (tap_seat == "INF" and mnf_seat == "-")
-            pnr_note = " (PNR replaced by Ticket Number)" if len(mnf_pnr) > 6 else ""
+            pnr_note = " (PNR diganti No Ticket)" if len(mnf_pnr) > 6 else ""
 
             if is_seat_same:
                 status = "🟢 MATCH"
@@ -467,6 +453,14 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
                 "CATATAN": catatan
             })
         else:
+            # KETENTUAN KHUSUS SEAT INF (INFANT)
+            if tap_seat == "INF" or "INFANT" in tap_type_final.upper():
+                status = "👶 INFANT"
+                catatan = "Pax Infant"
+            else:
+                status = "🔴 OFFLOAD"
+                catatan = "Offload / Not in Manifest"
+
             results.append({
                 "NO": no_counter,
                 "NAMA SCAN": tap_nama_raw,
@@ -477,8 +471,8 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
                 "SEAT MANIFEST": "-",
                 "PNR MANIFEST": "-",
                 "TYPE MANIFEST": "-",
-                "HASIL": "🔴 OFFLOAD",
-                "CATATAN": "Offload / Not in Manifest"
+                "HASIL": status,
+                "CATATAN": catatan
             })
         no_counter += 1
 
@@ -594,7 +588,6 @@ if menu == "📊 Rekonsiliasi Data":
                 st.error("❌ Proses dibatalkan karena data Manifest PDF/TXT tidak berhasil terbaca/kosong.")
             else:
                 df_result = reconcile_engine(df_tapping, df_manifest, airline)
-                
                 manifest_card_val = f"{flight_no_mnf} ({flight_route_mnf})"
 
                 # DETAIL PENERBANGAN
@@ -629,8 +622,9 @@ if menu == "📊 Rekonsiliasi Data":
                 cnt_offload = len(df_result[df_result["HASIL"].str.contains("OFFLOAD")])
                 cnt_seat_conflict = len(df_result[df_result["HASIL"].str.contains("SEAT CONFLICT")])
                 cnt_not_scan = len(df_result[df_result["HASIL"].str.contains("NOT SCAN")])
+                cnt_infant = len(df_result[df_result["HASIL"].str.contains("INFANT")])
 
-                r_col1, r_col2, r_col3, r_col4, r_col5, r_col6 = st.columns(6)
+                r_col1, r_col2, r_col3, r_col4, r_col5, r_col6, r_col7 = st.columns(7)
                 with r_col1:
                     st.markdown(f'<div class="custom-card" style="border-left-color: #38bdf8;"><div class="custom-card-label">📊 Pax Scan</div><div class="custom-card-value">{cnt_scan} Pax</div></div>', unsafe_allow_html=True)
                 with r_col2:
@@ -648,10 +642,13 @@ if menu == "📊 Rekonsiliasi Data":
                 if r_col6.button(f"⚪ NOT SCAN\n\n{cnt_not_scan} Pax", use_container_width=True):
                     st.session_state["filter_status"] = "NOT SCAN"
                     st.rerun()
+                if r_col7.button(f"👶 INFANT\n\n{cnt_infant} Pax", use_container_width=True):
+                    st.session_state["filter_status"] = "INFANT"
+                    st.rerun()
 
                 st.write("")
 
-                # RINGKASAN TYPE PAX (HITUNGAN AKUMULATIF / INKLUSIF FOR TRANSIT)
+                # RINGKASAN TYPE PAX
                 st.markdown('<div class="section-header">👥 Ringkasan Type Pax</div>', unsafe_allow_html=True)
                 
                 df_scan_only = df_result[df_result["NAMA SCAN"] != "-"]
