@@ -183,6 +183,8 @@ if "history" not in st.session_state:
     st.session_state["history"] = []
 if "filter_status" not in st.session_state:
     st.session_state["filter_status"] = "ALL"
+if "reconcile_done" not in st.session_state:
+    st.session_state["reconcile_done"] = False
 
 # -----------------------------------------------------------------------------
 # 2. HELPER NAMA & PARSER DOKUMEN
@@ -190,21 +192,44 @@ if "filter_status" not in st.session_state:
 
 def clean_passenger_name(name):
     """
-    Menghapus Gelar (MR, MRS, MS, MSTR, MISS, dll) serta karakter tidak terpakai
+    Menghapus Gelar (MR, MRS, MS, MSTR, MISS) dan kata sambung seperti XINGCHAOMR -> XING CHAO
     """
     if not name or name == "-":
         return ""
-    name = str(name).upper()
-    # Hapus garis miring/pemisah
-    name = name.replace("/", " ")
-    # Hapus Gelar Penumpang
+    name = str(name).upper().replace("/", " ")
+    
+    # Pisahkan kata sambung berdempetan dengan MR/MRS/MS
+    name = re.sub(r"([A-Z]+)(MR|MRS|MS|MSTR|MISS)\b", r"\1 ", name)
+    
+    # Hapus Gelar Penumpang Mandiri
     titles = [r"\bMR\b", r"\bMRS\b", r"\bMS\b", r"\bMSTR\b", r"\bMISS\b", r"\bMR\.\b", r"\bMRS\.\b", r"\bMS\.\b"]
     for t in titles:
         name = re.sub(t, "", name)
-    # Hapus karakter non-alphabet
+        
     name = re.sub(r"[^A-Z\s]", "", name)
-    # Normalkan spasi ganda
     return " ".join(name.split())
+
+def determine_scan_type(type_val, category_val):
+    """
+    Aturan Penentuan Type Scan:
+    a. Adult + Normal = Adult
+    b. Adult + Transit = Transit
+    c. Child + Normal = Child
+    d. Infant + Normal = Infant
+    e. Child + Transit = Child (transit)
+    f. Infant + Transit = Infant (transit)
+    """
+    t = str(type_val).strip().upper()
+    c = str(category_val).strip().upper()
+
+    is_transit = "TRANSIT" in c or "TRANSIT" in t
+
+    if "INFANT" in t or "INF" in t:
+        return "Infant (transit)" if is_transit else "Infant"
+    elif "CHILD" in t or "CHD" in t:
+        return "Child (transit)" if is_transit else "Child"
+    else:
+        return "Transit" if is_transit else "Adult"
 
 def load_tapping_file(uploaded_file):
     if uploaded_file is None:
@@ -303,7 +328,6 @@ def parse_manifest_lion_group(pdf_file):
     for line in lines:
         parts = line.split("/")
         if len(parts) >= 8:
-            # Menggabungkan LNAME (parts[0]) dan FNAME (parts[1])
             lname = re.sub(r"^[0-9\s]+", "", parts[0]).strip()
             fname = parts[1].strip() if len(parts) > 1 else ""
             raw_full_name = f"{fname} {lname}"
@@ -328,17 +352,22 @@ def parse_manifest_lion_group(pdf_file):
             tr_org = parts[9].strip() if len(parts) > 9 else "..."
             special_val = parts[-1].strip() if len(parts) > 0 else ""
 
+            # LOGIKA PENENTUAN TYPE MANIFEST
             type_pax = "Adult"
-            if "CHD" in special_val or "CHILD" in line.upper():
-                type_pax = "Child"
-            elif "INF" in special_val or "INFANT" in line.upper():
+            if "INF" in special_val or "INFANT" in line.upper():
                 type_pax = "Infant"
-            elif (in_flt != "..." and in_flt != "") or (tr_org != "..." and tr_org != ""):
-                type_pax = "Transit"
+            elif "CHD" in special_val or "CHILD" in line.upper():
+                type_pax = "Child"
+            else:
+                # Hanya diisi Transit jika IN.FLT atau TR.ORG TIDAK berisi titik/kosong
+                is_in_flt_valid = (in_flt != "..." and not re.match(r"^\.+$", in_flt) and in_flt != "")
+                is_tr_org_valid = (tr_org != "..." and not re.match(r"^\.+$", tr_org) and tr_org != "")
+                if is_in_flt_valid or is_tr_org_valid:
+                    type_pax = "Transit"
 
             if len(clean_name) > 2:
                 manifest_data.append({
-                    "raw_nama_manifest": f"{lname}/{fname}",
+                    "raw_nama_manifest": f"{fname} {lname}".strip(),
                     "clean_nama_manifest": clean_name,
                     "seat_manifest": seat,
                     "pnr_manifest": tkt_no,
@@ -364,30 +393,32 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
     results = []
     no_counter = 1
     
-    # Penanda baris manifest yang sudah terpakai
     df_manifest["is_matched"] = False
 
     for idx, tap in df_tapping.iterrows():
         tap_nama_raw = str(tap.get("NAME", tap.get("NAMA", tap.get("PASSENGER NAME", "")))).strip()
         tap_seat = str(tap.get("SEAT", tap.get("NO SEAT", ""))).strip().replace(".", "")
         tap_pnr = str(tap.get("PNR", tap.get("NO PNR", ""))).strip()
-        tap_type = str(tap.get("TYPE", tap.get("PAX TYPE", "Adult"))).strip()
         
+        raw_type = str(tap.get("TYPE", tap.get("PAX TYPE", "Adult"))).strip()
+        raw_cat = str(tap.get("CATEGORY", "")).strip()
+        
+        # Penentuan Tipe Scan berdasarkan Aturan Kombinasi a-f
+        tap_type_final = determine_scan_type(raw_type, raw_cat)
         tap_nama_clean = clean_passenger_name(tap_nama_raw)
         
         status = ""
         catatan = ""
         matched_idx = None
         
-        # Saring manifest yang belum terpakai
         available_manifest = df_manifest[~df_manifest["is_matched"]]
         
         # STRATEGI 1: Match Presisi via SEAT + FUZZY NAMA
-        if tap_seat != "-" and not available_manifest.empty:
+        if tap_seat != "-" and tap_seat != "INF" and not available_manifest.empty:
             same_seat_rows = available_manifest[available_manifest["seat_manifest"] == tap_seat]
             for m_idx, m_row in same_seat_rows.iterrows():
                 score = fuzz.token_set_ratio(tap_nama_clean, m_row["clean_nama_manifest"])
-                if score >= 60:  # Threshold tinggi untuk seat yang sama
+                if score >= 55:
                     matched_idx = m_idx
                     break
         
@@ -397,7 +428,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
             best_m_idx = None
             for m_idx, m_row in available_manifest.iterrows():
                 score = fuzz.token_set_ratio(tap_nama_clean, m_row["clean_nama_manifest"])
-                if score > best_score and score >= 65:  # Minimum 65% kemiripan kata
+                if score > best_score and score >= 60:
                     best_score = score
                     best_m_idx = m_idx
             if best_m_idx is not None:
@@ -413,7 +444,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
             mnf_pnr = match_row["pnr_manifest"]
             mnf_type = match_row["type_manifest"]
             
-            is_seat_same = (tap_seat == mnf_seat)
+            is_seat_same = (tap_seat == mnf_seat) or (tap_seat == "INF" and mnf_seat == "-")
             pnr_note = " (Match via No Ticket)" if len(mnf_pnr) > 6 else ""
 
             if is_seat_same:
@@ -428,7 +459,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
                 "NAMA SCAN": tap_nama_raw,
                 "SEAT SCAN": tap_seat,
                 "PNR SCAN": tap_pnr,
-                "TYPE SCAN": tap_type,
+                "TYPE SCAN": tap_type_final,
                 "NAMA MANIFEST": mnf_nama,
                 "SEAT MANIFEST": mnf_seat,
                 "PNR MANIFEST": mnf_pnr,
@@ -442,7 +473,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
                 "NAMA SCAN": tap_nama_raw,
                 "SEAT SCAN": tap_seat,
                 "PNR SCAN": tap_pnr,
-                "TYPE SCAN": tap_type,
+                "TYPE SCAN": tap_type_final,
                 "NAMA MANIFEST": "-",
                 "SEAT MANIFEST": "-",
                 "PNR MANIFEST": "-",
@@ -513,7 +544,9 @@ if menu == "📊 Rekonsiliasi Data":
         file_manifest = st.file_uploader("Upload Manifest PDF/TXT:", type=["pdf", "txt"])
         
         st.write("")
-        btn_proses = st.button("🚀 MULAI REKONSILIASI", use_container_width=True)
+        if st.button("🚀 MULAI REKONSILIASI", use_container_width=True):
+            st.session_state["reconcile_done"] = True
+            st.session_state["filter_status"] = "ALL"
 
     # -------------------------------------------------------------------------
     # 5. TAMPILAN KONTEN UTAMA
@@ -535,151 +568,150 @@ if menu == "📊 Rekonsiliasi Data":
             </div>
         ''', unsafe_allow_html=True)
 
-    if btn_proses:
+    if st.session_state.get("reconcile_done", False):
         if not file_manifest or not file_tapping1 or (flight_mode == "Combine Flight" and not file_tapping2):
             st.error("⚠️ Mohon lengkapi semua file upload di sidebar sebelah kiri sebelum memproses!")
         else:
-            with st.spinner("⏳ Memproses ekstraksi data & mencocokkan kriteria..."):
-                df_tap1, flight_scan1 = load_tapping_file(file_tapping1)
-                
-                if flight_mode == "Combine Flight":
-                    df_tap2, flight_scan2 = load_tapping_file(file_tapping2)
-                    if not df_tap1.empty and not df_tap2.empty:
-                        df_tapping = pd.concat([df_tap1, df_tap2], ignore_index=True)
-                    else:
-                        df_tapping = pd.DataFrame()
+            df_tap1, flight_scan1 = load_tapping_file(file_tapping1)
+            
+            if flight_mode == "Combine Flight":
+                df_tap2, flight_scan2 = load_tapping_file(file_tapping2)
+                if not df_tap1.empty and not df_tap2.empty:
+                    df_tapping = pd.concat([df_tap1, df_tap2], ignore_index=True)
                 else:
-                    df_tapping = df_tap1
-                    flight_scan2 = "-"
+                    df_tapping = pd.DataFrame()
+            else:
+                df_tapping = df_tap1
+                flight_scan2 = "-"
+            
+            if "LION" in airline.upper():
+                df_manifest, flight_no_mnf, flight_date_mnf, flight_route_mnf = parse_manifest_lion_group(file_manifest)
+            else:
+                df_manifest, flight_no_mnf, flight_date_mnf, flight_route_mnf = parse_manifest_lion_group(file_manifest)
+            
+            if df_tapping.empty:
+                st.error("❌ Proses dibatalkan karena data Tapping tidak berhasil terbaca/kosong.")
+            elif df_manifest.empty:
+                st.error("❌ Proses dibatalkan karena data Manifest PDF/TXT tidak berhasil terbaca/kosong.")
+            else:
+                df_result = reconcile_engine(df_tapping, df_manifest, airline)
                 
-                if "LION" in airline.upper():
-                    df_manifest, flight_no_mnf, flight_date_mnf, flight_route_mnf = parse_manifest_lion_group(file_manifest)
-                else:
-                    df_manifest, flight_no_mnf, flight_date_mnf, flight_route_mnf = parse_manifest_lion_group(file_manifest)
+                # Format Tampilan Kartu Manifest = Flight No + (Origin-Destination)
+                manifest_card_val = f"{flight_no_mnf} ({flight_route_mnf})"
+
+                # DETAIL PENERBANGAN
+                with st.container():
+                    st.markdown('<div id="sticky-flight-marker"></div>', unsafe_allow_html=True)
+                    st.markdown('<div class="section-header" style="margin-top:0;">✈️ Detail Penerbangan</div>', unsafe_allow_html=True)
+                    
+                    fc1, fc2, fc3, fc4, fc5, fc6, fc7 = st.columns(7)
+                    with fc1:
+                        st.markdown(f'<div class="custom-card"><div class="custom-card-label">🏢 Airline</div><div class="custom-card-value">{airline.split()[0]}</div></div>', unsafe_allow_html=True)
+                    with fc2:
+                        st.markdown(f'<div class="custom-card"><div class="custom-card-label">📄 No Flight</div><div class="custom-card-value">{flight_no_mnf}</div></div>', unsafe_allow_html=True)
+                    with fc3:
+                        st.markdown(f'<div class="custom-card" style="border-left-color: #eab308;"><div class="custom-card-label">📍 Rute</div><div class="custom-card-value">{flight_route_mnf}</div></div>', unsafe_allow_html=True)
+                    with fc4:
+                        st.markdown(f'<div class="custom-card"><div class="custom-card-label">📅 Tanggal</div><div class="custom-card-value">{flight_date_mnf}</div></div>', unsafe_allow_html=True)
+                    with fc5:
+                        st.markdown(f'<div class="custom-card"><div class="custom-card-label">📲 Scan 1</div><div class="custom-card-value">{flight_scan1}</div></div>', unsafe_allow_html=True)
+                    with fc6:
+                        st.markdown(f'<div class="custom-card"><div class="custom-card-label">📲 Scan 2</div><div class="custom-card-value">{flight_scan2}</div></div>', unsafe_allow_html=True)
+                    with fc7:
+                        st.markdown(f'<div class="custom-card"><div class="custom-card-label">📌 Manifest</div><div class="custom-card-value">{manifest_card_val}</div></div>', unsafe_allow_html=True)
+
+                st.write("")
+
+                # RINGKASAN REKONSILIASI
+                st.markdown('<div class="section-header">📈 Ringkasan Hasil Rekonsiliasi</div>', unsafe_allow_html=True)
                 
-                if df_tapping.empty:
-                    st.error("❌ Proses dibatalkan karena data Tapping tidak berhasil terbaca/kosong.")
-                elif df_manifest.empty:
-                    st.error("❌ Proses dibatalkan karena data Manifest PDF/TXT tidak berhasil terbaca/kosong.")
-                else:
-                    df_result = reconcile_engine(df_tapping, df_manifest, airline)
-                    
-                    st.session_state["history"].append({
-                        "time": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "airline": airline,
-                        "mode": flight_mode,
-                        "total_pax": len(df_result),
-                        "data": df_result
-                    })
+                cnt_scan = len(df_result[df_result["NAMA SCAN"] != "-"])
+                cnt_manifest = len(df_manifest)
+                cnt_match = len(df_result[df_result["HASIL"].str.contains("MATCH")])
+                cnt_offload = len(df_result[df_result["HASIL"].str.contains("OFFLOAD")])
+                cnt_seat_conflict = len(df_result[df_result["HASIL"].str.contains("SEAT CONFLICT")])
+                cnt_not_scan = len(df_result[df_result["HASIL"].str.contains("NOT SCAN")])
 
-                    # DETAIL PENERBANGAN
-                    with st.container():
-                        st.markdown('<div id="sticky-flight-marker"></div>', unsafe_allow_html=True)
-                        st.markdown('<div class="section-header" style="margin-top:0;">✈️ Detail Penerbangan</div>', unsafe_allow_html=True)
-                        
-                        fc1, fc2, fc3, fc4, fc5, fc6, fc7 = st.columns(7)
-                        with fc1:
-                            st.markdown(f'<div class="custom-card"><div class="custom-card-label">🏢 Airline</div><div class="custom-card-value">{airline.split()[0]}</div></div>', unsafe_allow_html=True)
-                        with fc2:
-                            st.markdown(f'<div class="custom-card"><div class="custom-card-label">📄 No Flight</div><div class="custom-card-value">{flight_no_mnf}</div></div>', unsafe_allow_html=True)
-                        with fc3:
-                            st.markdown(f'<div class="custom-card" style="border-left-color: #eab308;"><div class="custom-card-label">📍 Rute</div><div class="custom-card-value">{flight_route_mnf}</div></div>', unsafe_allow_html=True)
-                        with fc4:
-                            st.markdown(f'<div class="custom-card"><div class="custom-card-label">📅 Tanggal</div><div class="custom-card-value">{flight_date_mnf}</div></div>', unsafe_allow_html=True)
-                        with fc5:
-                            st.markdown(f'<div class="custom-card"><div class="custom-card-label">📲 Scan 1</div><div class="custom-card-value">{flight_scan1}</div></div>', unsafe_allow_html=True)
-                        with fc6:
-                            st.markdown(f'<div class="custom-card"><div class="custom-card-label">📲 Scan 2</div><div class="custom-card-value">{flight_scan2}</div></div>', unsafe_allow_html=True)
-                        with fc7:
-                            st.markdown(f'<div class="custom-card"><div class="custom-card-label">📌 Manifest</div><div class="custom-card-value">{flight_no_mnf}</div></div>', unsafe_allow_html=True)
+                r_col1, r_col2, r_col3, r_col4, r_col5, r_col6 = st.columns(6)
+                with r_col1:
+                    st.markdown(f'<div class="custom-card" style="border-left-color: #38bdf8;"><div class="custom-card-label">📊 Pax Scan</div><div class="custom-card-value">{cnt_scan} Pax</div></div>', unsafe_allow_html=True)
+                with r_col2:
+                    st.markdown(f'<div class="custom-card" style="border-left-color: #a855f7;"><div class="custom-card-label">📋 Pax Manifest</div><div class="custom-card-value">{cnt_manifest} Pax</div></div>', unsafe_allow_html=True)
+                
+                # METODE FILTER TOMBOL RINGKASAN
+                if r_col3.button(f"🟢 MATCH\n\n{cnt_match} Pax", use_container_width=True):
+                    st.session_state["filter_status"] = "MATCH"
+                    st.rerun()
+                if r_col4.button(f"🔴 OFFLOAD\n\n{cnt_offload} Pax", use_container_width=True):
+                    st.session_state["filter_status"] = "OFFLOAD"
+                    st.rerun()
+                if r_col5.button(f"🟠 SEAT CONFLICT\n\n{cnt_seat_conflict} Pax", use_container_width=True):
+                    st.session_state["filter_status"] = "SEAT CONFLICT"
+                    st.rerun()
+                if r_col6.button(f"⚪ NOT SCAN\n\n{cnt_not_scan} Pax", use_container_width=True):
+                    st.session_state["filter_status"] = "NOT SCAN"
+                    st.rerun()
 
-                    st.write("")
+                st.write("")
 
-                    # RINGKASAN REKONSILIASI
-                    st.markdown('<div class="section-header">📈 Ringkasan Hasil Rekonsiliasi</div>', unsafe_allow_html=True)
-                    
-                    cnt_scan = len(df_result[df_result["NAMA SCAN"] != "-"])
-                    cnt_manifest = len(df_manifest)
-                    cnt_match = len(df_result[df_result["HASIL"].str.contains("MATCH")])
-                    cnt_offload = len(df_result[df_result["HASIL"].str.contains("OFFLOAD")])
-                    cnt_seat_conflict = len(df_result[df_result["HASIL"].str.contains("SEAT CONFLICT")])
-                    cnt_not_scan = len(df_result[df_result["HASIL"].str.contains("NOT SCAN")])
+                # RINGKASAN TYPE PAX
+                st.markdown('<div class="section-header">👥 Ringkasan Type Pax</div>', unsafe_allow_html=True)
+                
+                scan_adult = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"] == "Adult")])
+                scan_child = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.startswith("Child"))])
+                scan_infant = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.startswith("Infant"))])
+                scan_transit = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"] == "Transit")])
 
-                    r_col1, r_col2, r_col3, r_col4, r_col5, r_col6 = st.columns(6)
-                    with r_col1:
-                        st.markdown(f'<div class="custom-card" style="border-left-color: #38bdf8;"><div class="custom-card-label">📊 Pax Scan</div><div class="custom-card-value">{cnt_scan} Pax</div></div>', unsafe_allow_html=True)
-                    with r_col2:
-                        st.markdown(f'<div class="custom-card" style="border-left-color: #a855f7;"><div class="custom-card-label">📋 Pax Manifest</div><div class="custom-card-value">{cnt_manifest} Pax</div></div>', unsafe_allow_html=True)
-                    
-                    if r_col3.button(f"🟢 MATCH\n\n{cnt_match} Pax", use_container_width=True):
-                        st.session_state["filter_status"] = "MATCH"
-                    if r_col4.button(f"🔴 OFFLOAD\n\n{cnt_offload} Pax", use_container_width=True):
-                        st.session_state["filter_status"] = "OFFLOAD"
-                    if r_col5.button(f"🟠 SEAT CONFLICT\n\n{cnt_seat_conflict} Pax", use_container_width=True):
-                        st.session_state["filter_status"] = "SEAT CONFLICT"
-                    if r_col6.button(f"⚪ NOT SCAN\n\n{cnt_not_scan} Pax", use_container_width=True):
-                        st.session_state["filter_status"] = "NOT SCAN"
+                mnf_adult = len(df_manifest[df_manifest["type_manifest"] == "Adult"])
+                mnf_child = len(df_manifest[df_manifest["type_manifest"] == "Child"])
+                mnf_infant = len(df_manifest[df_manifest["type_manifest"] == "Infant"])
+                mnf_transit = len(df_manifest[df_manifest["type_manifest"] == "Transit"])
 
-                    st.write("")
+                pax_col1, pax_col2 = st.columns(2)
+                with pax_col1:
+                    with st.container(border=True):
+                        st.markdown('<div style="font-size: 14px; font-weight: 700; color: #0284c7; margin-bottom: 8px;">📲 DATA SCAN</div>', unsafe_allow_html=True)
+                        ps1, ps2, ps3, ps4 = st.columns(4)
+                        ps1.metric("Adult Scan", f"{scan_adult}")
+                        ps2.metric("Child Scan", f"{scan_child}")
+                        ps3.metric("Infant Scan", f"{scan_infant}")
+                        ps4.metric("Transit Scan", f"{scan_transit}")
 
-                    # RINGKASAN TYPE PAX
-                    st.markdown('<div class="section-header">👥 Ringkasan Type Pax</div>', unsafe_allow_html=True)
-                    
-                    scan_adult = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("ADULT|ADT", na=False))])
-                    scan_child = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("CHILD|CHD", na=False))])
-                    scan_infant = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("INFANT|INF", na=False))])
-                    scan_transit = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("TRANSIT|TRNS", na=False))])
+                with pax_col2:
+                    with st.container(border=True):
+                        st.markdown('<div style="font-size: 14px; font-weight: 700; color: #a855f7; margin-bottom: 8px;">📋 DATA MANIFEST</div>', unsafe_allow_html=True)
+                        pm1, pm2, pm3, pm4 = st.columns(4)
+                        pm1.metric("Adult Mnf", f"{mnf_adult}")
+                        pm2.metric("Child Mnf", f"{mnf_child}")
+                        pm3.metric("Infant Mnf", f"{mnf_infant}")
+                        pm4.metric("Transit Mnf", f"{mnf_transit}")
 
-                    mnf_adult = len(df_manifest[df_manifest["type_manifest"] == "Adult"])
-                    mnf_child = len(df_manifest[df_manifest["type_manifest"] == "Child"])
-                    mnf_infant = len(df_manifest[df_manifest["type_manifest"] == "Infant"])
-                    mnf_transit = len(df_manifest[df_manifest["type_manifest"] == "Transit"])
+                # TABEL DETAIL UTAMA
+                col_t1, col_t2 = st.columns([3, 1])
+                with col_t1:
+                    st.markdown(f'<div class="section-header">📋 Detail Pencocokan Penumpang <span style="font-size: 14px; font-weight: normal; color: #0284c7;">(Filter Active: {st.session_state["filter_status"]})</span></div>', unsafe_allow_html=True)
+                with col_t2:
+                    if st.button("🔄 Reset Filter Tabel", use_container_width=True):
+                        st.session_state["filter_status"] = "ALL"
+                        st.rerun()
 
-                    pax_col1, pax_col2 = st.columns(2)
-                    with pax_col1:
-                        with st.container(border=True):
-                            st.markdown('<div style="font-size: 14px; font-weight: 700; color: #0284c7; margin-bottom: 8px;">📲 DATA SCAN</div>', unsafe_allow_html=True)
-                            ps1, ps2, ps3, ps4 = st.columns(4)
-                            ps1.metric("Adult Scan", f"{scan_adult}")
-                            ps2.metric("Child Scan", f"{scan_child}")
-                            ps3.metric("Infant Scan", f"{scan_infant}")
-                            ps4.metric("Transit Scan", f"{scan_transit}")
+                df_display = df_result.copy()
+                if st.session_state["filter_status"] != "ALL":
+                    df_display = df_display[df_display["HASIL"].str.contains(st.session_state["filter_status"])]
 
-                    with pax_col2:
-                        with st.container(border=True):
-                            st.markdown('<div style="font-size: 14px; font-weight: 700; color: #a855f7; margin-bottom: 8px;">📋 DATA MANIFEST</div>', unsafe_allow_html=True)
-                            pm1, pm2, pm3, pm4 = st.columns(4)
-                            pm1.metric("Adult Mnf", f"{mnf_adult}")
-                            pm2.metric("Child Mnf", f"{mnf_child}")
-                            pm3.metric("Infant Mnf", f"{mnf_infant}")
-                            pm4.metric("Transit Mnf", f"{mnf_transit}")
-
-                    # TABEL DETAIL UTAMA
-                    col_t1, col_t2 = st.columns([3, 1])
-                    with col_t1:
-                        st.markdown(f'<div class="section-header">📋 Detail Pencocokan Penumpang <span style="font-size: 14px; font-weight: normal; color: #0284c7;">(Filter Active: {st.session_state["filter_status"]})</span></div>', unsafe_allow_html=True)
-                    with col_t2:
-                        if st.button("🔄 Reset Filter Tabel", use_container_width=True):
-                            st.session_state["filter_status"] = "ALL"
-
-                    df_display = df_result.copy()
-                    if st.session_state["filter_status"] != "ALL":
-                        df_display = df_display[df_display["HASIL"].str.contains(st.session_state["filter_status"])]
-
-                    # MENAMPILKAN TABEL TANPA INDEKS DUPLIKAT Streamlit
-                    st.dataframe(df_display, use_container_width=True, height=500, hide_index=True)
-                    
-                    output = io.BytesIO()
-                    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                        df_result.to_excel(writer, index=False, sheet_name="Rekonsiliasi")
-                    
-                    st.download_button(
-                        label="📥 Download Laporan Hasil (.XLSX)",
-                        data=output.getvalue(),
-                        file_name=f"InJourney_Rekonsiliasi_{airline.split()[0]}.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True
-                    )
+                st.dataframe(df_display, use_container_width=True, height=500, hide_index=True)
+                
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine="openpyxl") as writer:
+                    df_result.to_excel(writer, index=False, sheet_name="Rekonsiliasi")
+                
+                st.download_button(
+                    label="📥 Download Laporan Hasil (.XLSX)",
+                    data=output.getvalue(),
+                    file_name=f"InJourney_Rekonsiliasi_{airline.split()[0]}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
 
     else:
         st.markdown("""
