@@ -1,6 +1,8 @@
 streamlit
 pandas
 pdfplumber
-openpyxl
 rapidfuzz
+openpyxl
+xlrd
 lxml
+html5lib
