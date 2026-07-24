@@ -193,20 +193,26 @@ if "reconcile_done" not in st.session_state:
 def clean_passenger_name(name):
     """
     Pembersihan Gelar Penumpang (MR, MRS, MS, MSTR, MISS, SE, dll) dan Karakter Pengganggu.
-    Mendukung pembalikan nama dari LASTNAME,FIRSTNAME -> FIRSTNAME LASTNAME
+    Mendukung pembalikan nama dari LASTNAME,FIRSTNAME atau LASTNAME/FIRSTNAME -> FIRSTNAME LASTNAME
     """
     if not name or name == "-":
         return ""
     name_str = str(name).upper().strip()
     
-    if "," in name_str:
+    # Format Garis Miring (LASTNAME/FIRSTNAME) atau Koma (LASTNAME,FIRSTNAME)
+    if "/" in name_str:
+        parts = name_str.split("/")
+        if len(parts) >= 2:
+            lname = parts[0].strip()
+            fname = parts[1].strip()
+            name_str = f"{fname} {lname}"
+    elif "," in name_str:
         parts = name_str.split(",")
         if len(parts) >= 2:
             lname = parts[0].strip()
             fname = parts[1].strip()
             name_str = f"{fname} {lname}"
 
-    name_str = name_str.replace("/", " ")
     name_str = re.sub(r"([A-Z]+)(MR|MRS|MS|MSTR|MISS)\b", r"\1 ", name_str)
     
     titles = [
@@ -224,12 +230,26 @@ def determine_pax_type(type_val, is_transit=False):
     Penentuan Format Tipe Penumpang
     """
     t = str(type_val).strip().upper()
-    if "INFANT" in t or "INF" in t:
+    if t in ["I", "INF", "INFANT"]:
         return "Infant (Transit)" if is_transit else "Infant"
-    elif "CHILD" in t or "CHD" in t:
+    elif t in ["C", "CHD", "CHILD"]:
         return "Child (Transit)" if is_transit else "Child"
-    else:
+    elif t in ["M", "F", "ADULT", "ADT"]:
         return "Adult (Transit)" if is_transit else "Adult"
+    else:
+        return "-"
+
+def clean_seat_number(seat_raw):
+    """
+    Menghapus angka nol di depan nomor kursi (contoh: 007K -> 7K, 042A -> 42A)
+    """
+    if not seat_raw or seat_raw == "-":
+        return "-"
+    seat_clean = seat_raw.strip().upper()
+    match = re.search(r"0*([1-9]\d*[A-F])", seat_clean)
+    if match:
+        return match.group(1)
+    return seat_clean
 
 def load_tapping_file(uploaded_file):
     if uploaded_file is None:
@@ -487,7 +507,94 @@ def parse_manifest_citilink(pdf_file):
     return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
 
 # -----------------------------------------------------------------------------
-# 3. RECONCILE ENGINE DENGAN CEK PENUMPANG INFANT KETAT (AKURAT 100%)
+# PARSER 3: GARUDA INDONESIA (GA)
+# -----------------------------------------------------------------------------
+
+def parse_manifest_garuda(pdf_file):
+    manifest_data = []
+    flight_no_mnf = "-"
+    flight_date_mnf = "-"
+    origin = "-"
+    destination = "-"
+    
+    full_text = ""
+    if hasattr(pdf_file, "name") and pdf_file.name.endswith(".txt"):
+        full_text = pdf_file.getvalue().decode("utf-8", errors="ignore")
+    else:
+        try:
+            with pdfplumber.open(pdf_file) as pdf:
+                for page in pdf.pages:
+                    text = page.extract_text()
+                    if text:
+                        full_text += text + "\n"
+        except Exception:
+            pdf_file.seek(0)
+            full_text = pdf_file.read().decode("utf-8", errors="ignore")
+
+    # Header Extraction Garuda
+    # Contoh: 1 GA533 22JUL BDJ STD0700 BOARD 0630 GATE 6
+    fl_match = re.search(r"(GA\d{3,4})\s+(\d{1,2}[A-Z]{3})\s+([A-Z]{3})", full_text, re.IGNORECASE)
+    if fl_match:
+        flight_no_mnf = fl_match.group(1).upper()
+        flight_date_mnf = fl_match.group(2).upper()
+        origin = fl_match.group(3).upper()
+
+    # Ekstraksi Rute
+    route_match = re.search(r"\b([A-Z]{3})\s+([A-Z]{3})\s+[A-Z0-9]{2}\s+[BN]\b", full_text)
+    if route_match:
+        origin = route_match.group(1).upper()
+        destination = route_match.group(2).upper()
+
+    flight_route_mnf = f"{origin}-{destination}" if origin != "-" and destination != "-" else "-"
+
+    # Parsing Data Penumpang Garuda
+    lines = full_text.split("\n")
+    for line in lines:
+        line_str = line.strip()
+        if not line_str or line_str.startswith("LIST OF") or line_str.startswith("Generic Report") or line_str.startswith("*"):
+            continue
+
+        # Regex Parser Baris Penumpang Garuda
+        # Contoh Manifest 1: 1.AL WALID/MUHAMMAD K MR M BDJ CGK YV B 042A
+        # Contoh Manifest 2: 1.LATIF/YULIANA MASH MRS F BPN CGK CB B 006A 1262147357182 AS
+        # Contoh Infant: 32.HUMAIRA/R K MISS I BDJ CGK YH B 101
+        pattern = r"^\d+\.\s*([A-Za-z\/\s\.-]+?)\s+([M|F|C|I])?\s*([A-Z]{3})\s+([A-Z]{3})\s+([A-Z0-9]{2})\s+([B|N])\s*(\d{2,3}[A-F]|\d{3})?\s*(\d{13})?"
+        match = re.search(pattern, line_str)
+        
+        if match:
+            raw_name = match.group(1).strip()
+            gender_code = match.group(2) if match.group(2) else "-"
+            status_code = match.group(6)  # B = Boarded, N = No Show
+            seat_raw = match.group(7) if match.group(7) else "-"
+            tkt_no = match.group(8) if match.group(8) else "-"
+
+            clean_name = clean_passenger_name(raw_name)
+            pax_type = determine_pax_type(gender_code)
+
+            # Normalisasi Seat
+            if gender_code == "I" or "INF" in raw_name:
+                seat_val = "INF"
+                pax_type = "Infant"
+            else:
+                seat_val = clean_seat_number(seat_raw)
+
+            section_val = "NO_SHOW" if status_code == "N" else "BOARDED"
+
+            if len(clean_name) > 2:
+                manifest_data.append({
+                    "raw_nama_manifest": raw_name,
+                    "clean_nama_manifest": clean_name,
+                    "seat_manifest": seat_val,
+                    "pnr_manifest": tkt_no,
+                    "type_manifest": pax_type,
+                    "section": section_val,
+                    "is_matched": False
+                })
+
+    return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
+
+# -----------------------------------------------------------------------------
+# 3. RECONCILE ENGINE DENGAN CEK PENUMPANG INFANT KETAT
 # -----------------------------------------------------------------------------
 
 def reconcile_engine(df_tapping, df_manifest, airline_name):
@@ -507,7 +614,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
 
     for idx, tap in df_tapping.iterrows():
         tap_nama_raw = str(tap.get("NAME", tap.get("NAMA", tap.get("PASSENGER NAME", "")))).strip()
-        tap_seat = str(tap.get("SEAT", tap.get("NO SEAT", ""))).strip().replace(".", "")
+        tap_seat = clean_seat_number(str(tap.get("SEAT", tap.get("NO SEAT", ""))).strip().replace(".", ""))
         tap_pnr = str(tap.get("PNR", tap.get("NO PNR", ""))).strip()
         
         raw_type = str(tap.get("TYPE", tap.get("PAX TYPE", "Adult"))).strip()
@@ -519,14 +626,13 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
         tap_nama_no_space = tap_nama_clean.replace(" ", "")
         
         # ATURAN KHUSUS SEAT INF (INFANT SCAN):
-        # Infant tidak mencocokkan baris manifest siapapun, biarkan Manifest-nya kosong!
         if tap_seat == "INF" or "INFANT" in tap_type_final.upper():
             results.append({
                 "NO": no_counter,
                 "NAMA SCAN": tap_nama_raw,
                 "SEAT SCAN": tap_seat,
                 "PNR SCAN": tap_pnr,
-                "TYPE SCAN": tap_type_final,
+                "TYPE SCAN": tap_type_final if tap_type_final != "-" else "Infant",
                 "NAMA MANIFEST": "-",
                 "SEAT MANIFEST": "-",
                 "PNR MANIFEST": "-",
@@ -543,8 +649,8 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
         
         available_manifest = df_manifest[~df_manifest["is_matched"]]
         
-        # STRATEGI 1: PNR SAMA + SEAT SAMA ATAU NAMA COCOK (Khusus Group PNR)
-        if len(tap_pnr) >= 5 and tap_pnr != "NO_PNR_CITILINK" and not available_manifest.empty:
+        # STRATEGI 1: PNR SAMA / NO TIKET SAMA + SEAT SAMA ATAU NAMA COCOK
+        if len(tap_pnr) >= 5 and tap_pnr != "NO_PNR_CITILINK" and tap_pnr != "-" and not available_manifest.empty:
             pnr_matches = available_manifest[available_manifest["pnr_manifest"] == tap_pnr]
             if not pnr_matches.empty:
                 seat_match_pnr = pnr_matches[pnr_matches["seat_manifest"] == tap_seat]
@@ -628,7 +734,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
                 "NAMA SCAN": tap_nama_raw,
                 "SEAT SCAN": tap_seat,
                 "PNR SCAN": tap_pnr,
-                "TYPE SCAN": tap_type_final,
+                "TYPE SCAN": tap_type_final if tap_type_final != "-" else mnf_type,
                 "NAMA MANIFEST": mnf_nama,
                 "SEAT MANIFEST": mnf_seat,
                 "PNR MANIFEST": mnf_pnr,
@@ -763,7 +869,9 @@ if menu == "📊 Rekonsiliasi Data":
                 df_tapping = df_tap1
                 flight_scan2 = "-"
             
-            if "CITILINK" in airline.upper() or "QG" in airline.upper():
+            if "GARUDA" in airline.upper() or "GA" in airline.upper():
+                df_manifest, flight_no_mnf, flight_date_mnf, flight_route_mnf = parse_manifest_garuda(file_manifest)
+            elif "CITILINK" in airline.upper() or "QG" in airline.upper():
                 df_manifest, flight_no_mnf, flight_date_mnf, flight_route_mnf = parse_manifest_citilink(file_manifest)
             elif "LION" in airline.upper():
                 df_manifest, flight_no_mnf, flight_date_mnf, flight_route_mnf = parse_manifest_lion_group(file_manifest)
