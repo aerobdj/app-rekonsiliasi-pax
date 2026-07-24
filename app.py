@@ -487,7 +487,7 @@ def parse_manifest_citilink(pdf_file):
     return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
 
 # -----------------------------------------------------------------------------
-# 3. RECONCILE ENGINE DENGAN LOGIKA GROUP PNR + SEAT VALIDATION
+# 3. RECONCILE ENGINE DENGAN CEK PENUMPANG INFANT KETAT (AKURAT 100%)
 # -----------------------------------------------------------------------------
 
 def reconcile_engine(df_tapping, df_manifest, airline_name):
@@ -518,22 +518,39 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
         tap_nama_clean = clean_passenger_name(tap_nama_raw)
         tap_nama_no_space = tap_nama_clean.replace(" ", "")
         
+        # ATURAN KHUSUS SEAT INF (INFANT SCAN):
+        # Infant tidak mencocokkan baris manifest siapapun, biarkan Manifest-nya kosong!
+        if tap_seat == "INF" or "INFANT" in tap_type_final.upper():
+            results.append({
+                "NO": no_counter,
+                "NAMA SCAN": tap_nama_raw,
+                "SEAT SCAN": tap_seat,
+                "PNR SCAN": tap_pnr,
+                "TYPE SCAN": tap_type_final,
+                "NAMA MANIFEST": "-",
+                "SEAT MANIFEST": "-",
+                "PNR MANIFEST": "-",
+                "TYPE MANIFEST": "-",
+                "HASIL": "👶 INFANT",
+                "CATATAN": "Pax Infant"
+            })
+            no_counter += 1
+            continue
+
         status = ""
         catatan = ""
         matched_idx = None
         
         available_manifest = df_manifest[~df_manifest["is_matched"]]
         
-        # STRATEGI 1: PNR SAMA + SEAT SAMA ATAU NAMA COCOK (Mencegah salah pasang di Group Booking PNR)
+        # STRATEGI 1: PNR SAMA + SEAT SAMA ATAU NAMA COCOK (Khusus Group PNR)
         if len(tap_pnr) >= 5 and tap_pnr != "NO_PNR_CITILINK" and not available_manifest.empty:
             pnr_matches = available_manifest[available_manifest["pnr_manifest"] == tap_pnr]
             if not pnr_matches.empty:
-                # 1a. Cek apakah ada yang SEAT nya sama persis di PNR tsb
                 seat_match_pnr = pnr_matches[pnr_matches["seat_manifest"] == tap_seat]
                 if not seat_match_pnr.empty:
                     matched_idx = seat_match_pnr.index[0]
                 else:
-                    # 1b. Jika seat beda di PNR sama, cari nama yang paling cocok (bukan asal ambil ke-0)
                     best_pnr_score = 0
                     best_pnr_idx = None
                     for m_idx, m_row in pnr_matches.iterrows():
@@ -544,14 +561,14 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
                         s2 = fuzz.ratio(tap_nama_no_space, m_no_space)
                         max_s = max(s1, s2)
                         
-                        if max_s > best_pnr_score and max_s >= 55:
+                        if max_s > best_pnr_score and max_s >= 60:
                             best_pnr_score = max_s
                             best_pnr_idx = m_idx
                     if best_pnr_idx is not None:
                         matched_idx = best_pnr_idx
 
-        # STRATEGI 2: SEAT SAMA + FUZZY COMPACT NAME (Jika PNR tidak cocok/berbeda)
-        if matched_idx is None and tap_seat != "-" and tap_seat != "INF" and not available_manifest.empty:
+        # STRATEGI 2: SEAT SAMA + FUZZY NAMA (Minimal 50% Kemiripan jika Seat SAMA Persis)
+        if matched_idx is None and tap_seat != "-" and not available_manifest.empty:
             same_seat_rows = available_manifest[available_manifest["seat_manifest"] == tap_seat]
             for m_idx, m_row in same_seat_rows.iterrows():
                 m_clean = m_row["clean_nama_manifest"]
@@ -564,7 +581,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
                     matched_idx = m_idx
                     break
 
-        # STRATEGI 3: FUZZY NAME MATCH GENERAL (Minimal 55% jika nama berdempetan)
+        # STRATEGI 3: FUZZY NAME MATCH SANGAT KETAT (Minimal 75% untuk beda seat agar tidak merebut nama lain)
         if matched_idx is None and not available_manifest.empty:
             best_score = 0
             best_m_idx = None
@@ -576,7 +593,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
                 score2 = fuzz.ratio(tap_nama_no_space, m_no_space)
                 max_s = max(score1, score2)
                 
-                if max_s > best_score and max_s >= 55:
+                if max_s > best_score and max_s >= 75:
                     best_score = max_s
                     best_m_idx = m_idx
             if best_m_idx is not None:
@@ -593,7 +610,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
             mnf_type = match_row["type_manifest"]
             mnf_section = match_row.get("section", "BOARDED")
             
-            is_seat_same = (tap_seat == mnf_seat) or (tap_seat == "INF" and mnf_seat in ["INF", "-"])
+            is_seat_same = (tap_seat == mnf_seat)
             pnr_note = " (PNR diganti No Ticket)" if len(mnf_pnr) > 6 else ""
 
             if mnf_section in ["NO_SHOW", "THRU_NO_SHOW"]:
@@ -620,10 +637,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
                 "CATATAN": catatan
             })
         else:
-            if tap_seat == "INF" or "INFANT" in tap_type_final.upper():
-                status = "👶 INFANT"
-                catatan = "Pax Infant"
-            elif is_citilink:
+            if is_citilink:
                 status = "🟨 CONFIRMATION"
                 catatan = "Confirmation required"
             else:
