@@ -487,7 +487,7 @@ def parse_manifest_citilink(pdf_file):
     return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
 
 # -----------------------------------------------------------------------------
-# 3. RECONCILE ENGINE DENGAN ATURAN CERDAS (PNR MATCH & SEAT COMPACT MATCH)
+# 3. RECONCILE ENGINE DENGAN LOGIKA GROUP PNR + SEAT VALIDATION
 # -----------------------------------------------------------------------------
 
 def reconcile_engine(df_tapping, df_manifest, airline_name):
@@ -524,20 +524,39 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
         
         available_manifest = df_manifest[~df_manifest["is_matched"]]
         
-        # STRATEGI 1: MATCH PNR EKSAK (JIKA PNR VALID > 4 KARAKTER)
+        # STRATEGI 1: PNR SAMA + SEAT SAMA ATAU NAMA COCOK (Mencegah salah pasang di Group Booking PNR)
         if len(tap_pnr) >= 5 and tap_pnr != "NO_PNR_CITILINK" and not available_manifest.empty:
-            pnr_match = available_manifest[available_manifest["pnr_manifest"] == tap_pnr]
-            if not pnr_match.empty:
-                matched_idx = pnr_match.index[0]
+            pnr_matches = available_manifest[available_manifest["pnr_manifest"] == tap_pnr]
+            if not pnr_matches.empty:
+                # 1a. Cek apakah ada yang SEAT nya sama persis di PNR tsb
+                seat_match_pnr = pnr_matches[pnr_matches["seat_manifest"] == tap_seat]
+                if not seat_match_pnr.empty:
+                    matched_idx = seat_match_pnr.index[0]
+                else:
+                    # 1b. Jika seat beda di PNR sama, cari nama yang paling cocok (bukan asal ambil ke-0)
+                    best_pnr_score = 0
+                    best_pnr_idx = None
+                    for m_idx, m_row in pnr_matches.iterrows():
+                        m_clean = m_row["clean_nama_manifest"]
+                        m_no_space = m_clean.replace(" ", "")
+                        
+                        s1 = fuzz.token_set_ratio(tap_nama_clean, m_clean)
+                        s2 = fuzz.ratio(tap_nama_no_space, m_no_space)
+                        max_s = max(s1, s2)
+                        
+                        if max_s > best_pnr_score and max_s >= 55:
+                            best_pnr_score = max_s
+                            best_pnr_idx = m_idx
+                    if best_pnr_idx is not None:
+                        matched_idx = best_pnr_idx
 
-        # STRATEGI 2: SEAT SAMA + FUZZY COMPACT NAME (Mencegah potong nama)
+        # STRATEGI 2: SEAT SAMA + FUZZY COMPACT NAME (Jika PNR tidak cocok/berbeda)
         if matched_idx is None and tap_seat != "-" and tap_seat != "INF" and not available_manifest.empty:
             same_seat_rows = available_manifest[available_manifest["seat_manifest"] == tap_seat]
             for m_idx, m_row in same_seat_rows.iterrows():
                 m_clean = m_row["clean_nama_manifest"]
                 m_no_space = m_clean.replace(" ", "")
                 
-                # Cek Skor Token Set dan Compact Substring Match
                 score = fuzz.token_set_ratio(tap_nama_clean, m_clean)
                 score_no_space = fuzz.ratio(tap_nama_no_space, m_no_space)
                 
