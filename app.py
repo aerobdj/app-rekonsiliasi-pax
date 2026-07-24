@@ -196,7 +196,8 @@ if "filter_status" not in st.session_state:
 
 def load_tapping_file(uploaded_file):
     """
-    Bagian: Pembacaan file Tapping (CSV / Excel / TXT)
+    Bagian: Pembacaan file Tapping (CSV / Excel / XLS / HTML / TXT)
+    Mendukung file .xls hasil export sistem yang berformat HTML/Text.
     """
     if uploaded_file is None:
         return pd.DataFrame(), "-"
@@ -206,12 +207,25 @@ def load_tapping_file(uploaded_file):
     flight_no = "-"
     encodings = ["utf-8", "latin1", "iso-8859-1", "cp1252", "utf-16"]
 
+    # 1. Coba baca sebagai File Excel standar
     if filename.endswith((".xlsx", ".xls")):
         try:
+            uploaded_file.seek(0)
             df = pd.read_excel(uploaded_file)
         except Exception:
             df = None
 
+    # 2. Jika gagal/bukan excel biner, coba baca sebagai Tabel HTML (Sering terjadi pada export .xls dari web system)
+    if df is None or df.empty:
+        try:
+            uploaded_file.seek(0)
+            tables = pd.read_html(uploaded_file)
+            if tables and len(tables) > 0:
+                df = tables[0]
+        except Exception:
+            df = None
+
+    # 3. Jika masih gagal, coba baca sebagai CSV / Text Tab-Separated
     if df is None or df.empty:
         for enc in encodings:
             for sep in ["\t", ",", ";", "|"]:
@@ -226,9 +240,12 @@ def load_tapping_file(uploaded_file):
             if df is not None and not df.empty:
                 break
 
+    # 4. Validasi & Normalisasi Header Kolom
     if df is not None and not df.empty:
+        # Menghapus spasi ekstra pada header dan mengubah ke huruf kapital
         df.columns = [str(col).strip().upper() for col in df.columns]
         
+        # Ekstraksi otomatis nomor flight dari kolom FLIGHT
         for col in ["FLIGHT", "FLIGHT NO", "FLIGHT_NO", "FLIGHTNO", "NO FLIGHT"]:
             if col in df.columns:
                 val = str(df[col].dropna().iloc[0]).strip() if not df[col].dropna().empty else "-"
@@ -237,7 +254,7 @@ def load_tapping_file(uploaded_file):
                     break
         return df, flight_no
     else:
-        st.error(f"⚠️ File **{uploaded_file.name}** tidak terbaca atau kosong.")
+        st.error(f"⚠️ File **{uploaded_file.name}** tidak berhasil terbaca atau kosong.")
         return pd.DataFrame(), "-"
 
 def parse_manifest_lion_group(pdf_file):
