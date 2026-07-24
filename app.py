@@ -24,10 +24,9 @@ st.logo(
     size="large"
 )
 
-# Custom CSS termasuk pengaktifan Sticky Freeze yang aman untuk Light/Dark Mode
+# Custom CSS
 st.markdown("""
     <style>
-    /* MENGATUR OVERFLOW PARENT AGAR STICKY BERHASIL DI STREAMLIT */
     [data-testid="stAppViewContainer"] {
         overflow: auto !important;
     }
@@ -117,7 +116,7 @@ st.markdown("""
         margin-top: 4px;
     }
 
-    /* KARTU SERAGAM & ELEGAN (ROUNDED DESAIN) */
+    /* KARTU SERAGAM & ELEGAN */
     .custom-card {
         background: rgba(30, 41, 59, 0.03);
         border: 1px solid rgba(148, 163, 184, 0.25);
@@ -168,7 +167,7 @@ st.markdown("""
         top: 3.5rem !important;
         z-index: 999 !important;
         background-color: var(--background-color, inherit) !important;
-        backdrop-filter: blur(8px);
+        backdrop-filter: blur(12px);
         padding-top: 14px !important;
         padding-bottom: 10px !important;
         border-bottom: 1px solid rgba(148, 163, 184, 0.2);
@@ -177,7 +176,7 @@ st.markdown("""
     .section-header {
         font-size: 16px;
         font-weight: 700;
-        margin-top: 8px;
+        margin-top: 4px;
         margin-bottom: 12px;
         display: flex;
         align-items: center;
@@ -192,10 +191,14 @@ if "filter_status" not in st.session_state:
     st.session_state["filter_status"] = "ALL"
 
 # -----------------------------------------------------------------------------
-# 2. HELPER PARSER & RECONCILE ENGINE
+# 2. CORE ENGINE & LOGIKA UTAMA REKONSILIASI
 # -----------------------------------------------------------------------------
 
 def load_tapping_file(uploaded_file):
+    """
+    Bagian: Pembacaan file Tapping (CSV / Excel / TXT)
+    Format kolom standar: Name, PNR, Flight, Flight Date, Seat, Type, Category, Scanned At, Scan Point
+    """
     if uploaded_file is None:
         return pd.DataFrame(), "-"
 
@@ -224,15 +227,6 @@ def load_tapping_file(uploaded_file):
             if df is not None and not df.empty:
                 break
 
-    if df is None or df.empty:
-        try:
-            uploaded_file.seek(0)
-            tables = pd.read_html(uploaded_file)
-            if tables:
-                df = tables[0]
-        except Exception:
-            pass
-
     if df is not None and not df.empty:
         df.columns = [str(col).strip().upper() for col in df.columns]
         
@@ -247,68 +241,10 @@ def load_tapping_file(uploaded_file):
         st.error(f"⚠️ File **{uploaded_file.name}** tidak terbaca atau kosong.")
         return pd.DataFrame(), "-"
 
-def parse_manifest_pdf(pdf_file, airline):
-    manifest_data = []
-    flight_no_mnf = "-"
-    flight_date_mnf = "-"
-    flight_route_mnf = "-"
-    
-    with pdfplumber.open(pdf_file) as pdf:
-        for page in pdf.pages:
-            text = page.extract_text()
-            if not text:
-                continue
-            
-            if flight_no_mnf == "-":
-                fl_match = re.search(r"(?:FLIGHT|FLT|NO FLIGHT)\s*[:\.-]?\s*([A-Z0-9]{2,3}\s*\d{3,4})", text, re.IGNORECASE)
-                if fl_match:
-                    flight_no_mnf = fl_match.group(1).strip()
-            
-            if flight_date_mnf == "-":
-                date_match = re.search(r"(?:DATE|TGL|TANGGAL)\s*[:\.-]?\s*(\d{1,2}[\/\-\s][A-Za-z0-9]{3,8}[\/\-\s]\d{2,4})", text, re.IGNORECASE)
-                if date_match:
-                    flight_date_mnf = date_match.group(1).strip()
-
-            if flight_route_mnf == "-":
-                route_match = re.search(r"(?:SECTOR|SEKTOR|ROUTE|RUTE)\s*[:\.-]?\s*([A-Z]{3}\s*[\-\/]\s*[A-Z]{3})", text, re.IGNORECASE)
-                if route_match:
-                    flight_route_mnf = route_match.group(1).replace(" ", "").strip()
-                else:
-                    alt_route = re.search(r"\b([A-Z]{3}[\-\/][A-Z]{3})\b", text)
-                    if alt_route:
-                        flight_route_mnf = alt_route.group(1).strip()
-
-            lines = text.split("\n")
-            for line in lines:
-                pnr_match = re.search(r"\b([A-Z0-9]{6})\b", line)
-                seat_match = re.search(r"\b([0-9]{1,2}[A-F])\b", line)
-                name_match = re.search(r"([A-Z\s\/,\.-]+(?:MR|MRS|MS|MISS|MSTR|TITOHIR|PAX)?)", line)
-                
-                pnr = pnr_match.group(1) if pnr_match else None
-                seat = seat_match.group(1) if seat_match else None
-                
-                type_pax = "Adult"
-                if "CHD" in line or "CHILD" in line:
-                    type_pax = "Child"
-                elif "INF" in line or "INFANT" in line:
-                    type_pax = "Infant"
-                elif "TRANSIT" in line or "TRNS" in line:
-                    type_pax = "Transit"
-
-                if seat or pnr:
-                    raw_name = name_match.group(1).strip() if name_match else line[:25].strip()
-                    clean_name = re.sub(r"[^A-Z\s\/]", "", raw_name).strip()
-                    if len(clean_name) > 3:
-                        manifest_data.append({
-                            "nama_manifest": clean_name,
-                            "seat_manifest": seat if seat else "NO_SEAT",
-                            "pnr_manifest": pnr if pnr else ("NO_PNR_LION" if "LION" in airline.upper() else "NO_PNR"),
-                            "type_manifest": type_pax
-                        })
-                        
-    return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
-
 def reconcile_engine(df_tapping, df_manifest, airline_name):
+    """
+    Bagian: Engine Pencocokan / Rekonsiliasi Utama antara Gate Tapping vs Manifest
+    """
     empty_columns = [
         "NO", "NAMA SCAN", "SEAT SCAN", "PNR SCAN", "TYPE SCAN",
         "NAMA MANIFEST", "SEAT MANIFEST", "PNR MANIFEST", "TYPE MANIFEST",
@@ -318,11 +254,11 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
         return pd.DataFrame(columns=empty_columns)
 
     results = []
-    has_manifest_pnr = not df_manifest["pnr_manifest"].str.contains("NO_PNR").all() if not df_manifest.empty else False
-    
     no_counter = 1
+    
     for idx, tap in df_tapping.iterrows():
-        tap_nama = str(tap.get("NAMA", tap.get("NAMA PAX", tap.get("PASSENGER NAME", "")))).strip()
+        # Mapping kolom dari format file Tapping baru
+        tap_nama = str(tap.get("NAME", tap.get("NAMA", tap.get("PASSENGER NAME", "")))).strip()
         tap_seat = str(tap.get("SEAT", tap.get("NO SEAT", ""))).strip()
         tap_pnr = str(tap.get("PNR", tap.get("NO PNR", ""))).strip()
         tap_type = str(tap.get("TYPE", tap.get("PAX TYPE", "Adult"))).strip()
@@ -350,22 +286,19 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
             matched_type_manifest = mnf_type
             
             is_seat_same = (tap_seat == mnf_seat)
-            is_pnr_same = (tap_pnr == mnf_pnr) if (has_manifest_pnr and tap_pnr != "") else False
             
-            pnr_note = " (PNR diganti No Ticket)" if (not has_manifest_pnr and "LION" in airline_name.upper()) else ""
+            # Untuk Lion Group, PNR di Tapping sering berupa PNR 6 digit, sedangkan manifest menggunakan No Ticket (13 digit).
+            # Jika PNR scan tidak sama dengan pnr_manifest, kita cek apakah pnr_manifest tersebut berupa nomor tiket (13 digit)
+            is_pnr_same = (tap_pnr == mnf_pnr) or (len(mnf_pnr) > 6 and tap_pnr != "")
+            
+            pnr_note = " (Lion Group: Match via No Ticket)" if len(mnf_pnr) > 6 else ""
 
-            if is_seat_same and is_pnr_same:
+            if is_seat_same:
                 status = "🟢 MATCH"
                 catatan = "Match Perfect" + pnr_note
-            elif is_seat_same and not is_pnr_same:
-                status = "🟡 MATCH"
-                catatan = "PNR Berbeda" + pnr_note
-            elif not is_seat_same and is_pnr_same:
-                status = "🟠 SEAT CONFLICT"
-                catatan = f"Change Seat (Seat Manifest: {mnf_seat})" + pnr_note
             else:
                 status = "🟠 SEAT CONFLICT"
-                catatan = "Perlu Validasi Ground" + pnr_note
+                catatan = f"Change Seat (Seat Manifest: {mnf_seat})" + pnr_note
         else:
             status = "🔴 OFFLOAD"
             catatan = "Offload / Not in Manifest"
@@ -412,7 +345,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
     return df_res
 
 # -----------------------------------------------------------------------------
-# 3. TAMPILAN SIDEBAR
+# 3. TAMPILAN SIDEBAR APLIKASI
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.markdown(f"""
@@ -492,12 +425,17 @@ if menu == "📊 Rekonsiliasi Data":
                     df_tapping = df_tap1
                     flight_scan2 = "-"
                 
-                df_manifest, flight_no_mnf, flight_date_mnf, flight_route_mnf = parse_manifest_pdf(file_manifest, airline)
+                # Pemanggilan Parser Berdasarkan Maskapai yang Dipilih
+                if "LION" in airline.upper():
+                    df_manifest, flight_no_mnf, flight_date_mnf, flight_route_mnf = parse_manifest_lion_group(file_manifest)
+                else:
+                    # Default / Fallback Parser jika maskapai lain dipilih
+                    df_manifest, flight_no_mnf, flight_date_mnf, flight_route_mnf = parse_manifest_lion_group(file_manifest)
                 
                 if df_tapping.empty:
                     st.error("❌ Proses dibatalkan karena data Tapping tidak berhasil terbaca/kosong.")
                 elif df_manifest.empty:
-                    st.error("❌ Proses dibatalkan karena data Manifest PDF tidak berhasil terbaca/kosong.")
+                    st.error("❌ Proses dibatalkan karena data Manifest PDF/TXT tidak berhasil terbaca/kosong.")
                 else:
                     df_result = reconcile_engine(df_tapping, df_manifest, airline)
                     
@@ -510,7 +448,7 @@ if menu == "📊 Rekonsiliasi Data":
                     })
 
                     # =========================================================
-                    # 1. DETAIL PENERBANGAN (STICKY FREEZE DENGAN MARKER AMAN)
+                    # DETAIL PENERBANGAN (STICKY FREEZE)
                     # =========================================================
                     with st.container():
                         st.markdown('<div id="sticky-flight-marker"></div>', unsafe_allow_html=True)
@@ -570,7 +508,7 @@ if menu == "📊 Rekonsiliasi Data":
                     st.write("")
 
                     # ---------------------------------------------------------
-                    # 2. RINGKASAN HASIL REKONSILIASI
+                    # RINGKASAN HASIL REKONSILIASI
                     # ---------------------------------------------------------
                     st.markdown('<div class="section-header">📈 Ringkasan Hasil Rekonsiliasi</div>', unsafe_allow_html=True)
                     
@@ -609,7 +547,7 @@ if menu == "📊 Rekonsiliasi Data":
                     st.write("")
 
                     # ---------------------------------------------------------
-                    # 3. RINGKASAN TYPE PAX
+                    # RINGKASAN TYPE PAX
                     # ---------------------------------------------------------
                     st.markdown('<div class="section-header">👥 Ringkasan Type Pax</div>', unsafe_allow_html=True)
                     
@@ -618,10 +556,10 @@ if menu == "📊 Rekonsiliasi Data":
                     scan_infant = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("INFANT|INF", na=False))])
                     scan_transit = len(df_result[(df_result["NAMA SCAN"] != "-") & (df_result["TYPE SCAN"].str.upper().str.contains("TRANSIT|TRNS", na=False))])
 
-                    mnf_adult = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("ADULT", na=False)])
-                    mnf_child = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("CHILD", na=False)])
-                    mnf_infant = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("INFANT", na=False)])
-                    mnf_transit = len(df_manifest[df_manifest["type_manifest"].str.upper().str.contains("TRANSIT", na=False)])
+                    mnf_adult = len(df_manifest[df_manifest["type_manifest"] == "Adult"])
+                    mnf_child = len(df_manifest[df_manifest["type_manifest"] == "Child"])
+                    mnf_infant = len(df_manifest[df_manifest["type_manifest"] == "Infant"])
+                    mnf_transit = len(df_manifest[df_manifest["type_manifest"] == "Transit"])
 
                     pax_col1, pax_col2 = st.columns(2)
                     
@@ -644,7 +582,7 @@ if menu == "📊 Rekonsiliasi Data":
                             pm4.metric("Transit Mnf", f"{mnf_transit}")
 
                     # ---------------------------------------------------------
-                    # 4. DETAIL PENCOCOKAN PENUMPANG (TABEL UTAMA)
+                    # DETAIL PENCOCOKAN PENUMPANG (TABEL UTAMA)
                     # ---------------------------------------------------------
                     col_t1, col_t2 = st.columns([3, 1])
                     with col_t1:
@@ -698,3 +636,108 @@ elif menu == "📜 Histori Log":
         for idx, item in enumerate(reversed(st.session_state["history"])):
             with st.expander(f"🕒 {item['time']} — {item['airline']} ({item['mode']}) — Total: {item['total_pax']} Pax"):
                 st.dataframe(item["data"], use_container_width=True)
+
+# =============================================================================
+# 5. MODULAR PARSER SECTION (TAMBAHKAN PARSER MASKAPAI LAIN DI BAWAH INI)
+# =============================================================================
+
+def parse_manifest_lion_group(pdf_file):
+    """
+    Bagian: Modul Parser Khusus Manifest Lion Group (PDF atau TXT)
+    Mengatur ekstraksi: Flight Number, Tanggal, Rute (ORIGIN-DESTINATION), Seat, PNR/No Ticket, dan Tipe Pax.
+    """
+    manifest_data = []
+    flight_no_mnf = "-"
+    flight_date_mnf = "-"
+    origin = "-"
+    destination = "-"
+    
+    full_text = ""
+    if hasattr(pdf_file, "name") and pdf_file.name.endswith(".txt"):
+        full_text = pdf_file.getvalue().decode("utf-8", errors="ignore")
+    else:
+        try:
+            with pdfplumber.open(pdf_file) as pdf:
+                for page in pdf.pages:
+                    text = page.extract_text()
+                    if text:
+                        full_text += text + "\n"
+        except Exception:
+            pdf_file.seek(0)
+            full_text = pdf_file.read().decode("utf-8", errors="ignore")
+
+    # 1. Ekstraksi Informasi Penerbangan Header
+    fl_match = re.search(r"FLIGHT\s*[:\.-]?\s*([A-Z0-9]{2,3}\s*\d{3,4})", full_text, re.IGNORECASE)
+    if fl_match:
+        flight_no_mnf = fl_match.group(1).strip()
+        
+    date_match = re.search(r"DATE\s*[:\.-]?\s*(\d{1,2}[A-Z]{3}\d{2})", full_text, re.IGNORECASE)
+    if date_match:
+        flight_date_mnf = date_match.group(1).strip()
+
+    emb_match = re.search(r"PT\.OF\s*EMBARKATION\s*[:\.-]?\s*([A-Z]{3})", full_text, re.IGNORECASE)
+    if emb_match:
+        origin = emb_match.group(1).strip()
+
+    dest_match = re.search(r"PT\.OF\s*DEST\s*[:\.-]?\s*([A-Z]{3})", full_text, re.IGNORECASE)
+    if dest_match:
+        destination = dest_match.group(1).strip()
+
+    flight_route_mnf = f"{origin}-{destination}" if origin != "-" and destination != "-" else "-"
+
+    # 2. Ekstraksi Baris Data Penumpang Manifest Lion Group
+    lines = full_text.split("\n")
+    for line in lines:
+        # Pola baris manifes Lion Group: No, Nama, Title, Seat, Bags, ..., TIKET#, IN.FLT, TR.ORG, ..., SPECIAL
+        # Contoh: 003 CAI/FAXIN MR./M./12A/..1/....12/216568/9902144430494/IU00628/CGK/......./.../....
+        parts = line.split("/")
+        if len(parts) >= 8:
+            raw_name = parts[1].strip() if len(parts) > 1 else ""
+            clean_name = re.sub(r"[^A-Z\s]", "", raw_name).strip()
+            
+            # Cek seat (biasanya berupa format angka diikuti huruf, misal 17D, 12A)
+            seat = "-"
+            for part in parts:
+                if re.match(r"^[0-9]{1,2}[A-F]$", part.strip()):
+                    seat = part.strip()
+                    break
+
+            # Cek No Ticket / PNR (kolom TKT# atau angka 13 digit)
+            tkt_no = "NO_PNR_LION"
+            for part in parts:
+                part_clean = part.strip()
+                if part_clean.isdigit() and len(part_clean) >= 10:
+                    tkt_no = part_clean
+                    break
+
+            # Cek IN.FLT (kolom penerbangan lanjutan)
+            in_flt = "..."
+            if len(parts) > 8:
+                in_flt = parts[8].strip()
+
+            # Cek TR.ORG (transit origin)
+            tr_org = "..."
+            if len(parts) > 9:
+                tr_org = parts[9].strip()
+
+            # Cek SPECIAL (kolom terakhir untuk CHD / INF)
+            special_val = parts[-1].strip() if len(parts) > 0 else ""
+
+            # Penentuan Tipe Pax Berdasarkan Aturan Khusus Lion Group
+            type_pax = "Adult"
+            if "CHD" in special_val or "CHILD" in line.upper():
+                type_pax = "Child"
+            elif "INF" in special_val or "INFANT" in line.upper():
+                type_pax = "Infant"
+            elif (in_flt != "..." and in_flt != "") or (tr_org != "..." and tr_org != ""):
+                type_pax = "Transit"
+
+            if len(clean_name) > 2 and seat != "-":
+                manifest_data.append({
+                    "nama_manifest": clean_name,
+                    "seat_manifest": seat,
+                    "pnr_manifest": tkt_no,
+                    "type_manifest": type_pax
+                })
+
+    return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
