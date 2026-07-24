@@ -191,15 +191,10 @@ if "reconcile_done" not in st.session_state:
 # -----------------------------------------------------------------------------
 
 def clean_passenger_name(name):
-    """
-    Pembersihan Gelar Penumpang (MR, MRS, MS, MSTR, MISS, SE, dll) dan Karakter Pengganggu.
-    Mendukung pembalikan nama dari LASTNAME,FIRSTNAME atau LASTNAME/FIRSTNAME -> FIRSTNAME LASTNAME
-    """
     if not name or name == "-":
         return ""
     name_str = str(name).upper().strip()
     
-    # Format Garis Miring (LASTNAME/FIRSTNAME) atau Koma (LASTNAME,FIRSTNAME)
     if "/" in name_str:
         parts = name_str.split("/")
         if len(parts) >= 2:
@@ -226,9 +221,6 @@ def clean_passenger_name(name):
     return " ".join(name_str.split())
 
 def determine_pax_type(type_val, is_transit=False):
-    """
-    Penentuan Format Tipe Penumpang
-    """
     t = str(type_val).strip().upper()
     if t in ["I", "INF", "INFANT"]:
         return "Infant (Transit)" if is_transit else "Infant"
@@ -240,15 +232,15 @@ def determine_pax_type(type_val, is_transit=False):
         return "-"
 
 def clean_seat_number(seat_raw):
-    """
-    Menghapus angka nol di depan nomor kursi (contoh: 007K -> 7K, 042A -> 42A)
-    """
     if not seat_raw or seat_raw == "-":
         return "-"
-    seat_clean = seat_raw.strip().upper()
-    match = re.search(r"0*([1-9]\d*[A-F])", seat_clean)
+    seat_clean = seat_raw.strip().upper().replace(" ", "")
+    match = re.search(r"0*([1-9]\d*[A-Z])", seat_clean)
     if match:
         return match.group(1)
+    match_num = re.search(r"0*([1-9]\d*)", seat_clean)
+    if match_num:
+        return match_num.group(1)
     return seat_clean
 
 def load_tapping_file(uploaded_file):
@@ -507,7 +499,7 @@ def parse_manifest_citilink(pdf_file):
     return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
 
 # -----------------------------------------------------------------------------
-# PARSER 3: GARUDA INDONESIA (GA)
+# PARSER 3: GARUDA INDONESIA (GA) - ANCHOR PATTERN STRATEGY
 # -----------------------------------------------------------------------------
 
 def parse_manifest_garuda(pdf_file):
@@ -531,48 +523,41 @@ def parse_manifest_garuda(pdf_file):
             pdf_file.seek(0)
             full_text = pdf_file.read().decode("utf-8", errors="ignore")
 
-    # Header Extraction Garuda
-    # Contoh: 1 GA533 22JUL BDJ STD0700 BOARD 0630 GATE 6
     fl_match = re.search(r"(GA\d{3,4})\s+(\d{1,2}[A-Z]{3})\s+([A-Z]{3})", full_text, re.IGNORECASE)
     if fl_match:
         flight_no_mnf = fl_match.group(1).upper()
         flight_date_mnf = fl_match.group(2).upper()
         origin = fl_match.group(3).upper()
 
-    # Ekstraksi Rute
-    route_match = re.search(r"\b([A-Z]{3})\s+([A-Z]{3})\s+[A-Z0-9]{2}\s+[BN]\b", full_text)
+    route_match = re.search(r"\b([A-Z]{3})\s+([A-Z]{3})\s+[A-Z0-9]{1,4}\s+[BN]\b", full_text)
     if route_match:
         origin = route_match.group(1).upper()
         destination = route_match.group(2).upper()
 
     flight_route_mnf = f"{origin}-{destination}" if origin != "-" and destination != "-" else "-"
 
-    # Parsing Data Penumpang Garuda
     lines = full_text.split("\n")
     for line in lines:
         line_str = line.strip()
-        if not line_str or line_str.startswith("LIST OF") or line_str.startswith("Generic Report") or line_str.startswith("*"):
+        if not line_str or line_str.startswith("Generic Report") or line_str.startswith("Report content"):
             continue
 
-        # Regex Parser Baris Penumpang Garuda
-        # Contoh Manifest 1: 1.AL WALID/MUHAMMAD K MR M BDJ CGK YV B 042A
-        # Contoh Manifest 2: 1.LATIF/YULIANA MASH MRS F BPN CGK CB B 006A 1262147357182 AS
-        # Contoh Infant: 32.HUMAIRA/R K MISS I BDJ CGK YH B 101
-        pattern = r"^\d+\.\s*([A-Za-z\/\s\.-]+?)\s+([M|F|C|I])?\s*([A-Z]{3})\s+([A-Z]{3})\s+([A-Z0-9]{2})\s+([B|N])\s*(\d{2,3}[A-F]|\d{3})?\s*(\d{13})?"
+        # REGEX ANCHOR PATTERN TERBARU:
+        # Menolak pengaruh panjangnya kode kelas (1, 2, atau 3+ char) dengan cara mencari B/N + Kursi dari belakang
+        pattern = r"^\d+\.\s*([A-Za-z\/\s\.-]+?)\s+(?:([M|F|C|I])\s+)?([A-Z]{3})\s+([A-Z]{3})\s+[A-Z0-9]{1,4}\s+([B|N])\s*(\d{2,3}[A-Z]|\d{3})?\s*(\d{13})?"
         match = re.search(pattern, line_str)
         
         if match:
             raw_name = match.group(1).strip()
             gender_code = match.group(2) if match.group(2) else "-"
-            status_code = match.group(6)  # B = Boarded, N = No Show
-            seat_raw = match.group(7) if match.group(7) else "-"
-            tkt_no = match.group(8) if match.group(8) else "-"
+            status_code = match.group(5)  # B = Boarded, N = No Show
+            seat_raw = match.group(6) if match.group(6) else "-"
+            tkt_no = match.group(7) if match.group(7) else "-"
 
             clean_name = clean_passenger_name(raw_name)
             pax_type = determine_pax_type(gender_code)
 
-            # Normalisasi Seat
-            if gender_code == "I" or "INF" in raw_name:
+            if gender_code == "I" or "INF" in raw_name or seat_raw in ["101", "102"]:
                 seat_val = "INF"
                 pax_type = "Infant"
             else:
@@ -594,7 +579,7 @@ def parse_manifest_garuda(pdf_file):
     return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
 
 # -----------------------------------------------------------------------------
-# 3. RECONCILE ENGINE DENGAN CEK PENUMPANG INFANT KETAT
+# 3. RECONCILE ENGINE DENGAN LOGIKA BEBAS DOMINO CONFLICT
 # -----------------------------------------------------------------------------
 
 def reconcile_engine(df_tapping, df_manifest, airline_name):
@@ -842,7 +827,7 @@ if menu == "📊 Rekonsiliasi Data":
             <div class="main-header-container">
                 <div>
                     <h1 class="main-title">Passenger Reconciliation System</h1>
-                    <div class="sub-title">Sistem Rekonsiliasi Otomatis Data Gate Tapping vs Manifest Penumpang</div>
+                    <div class="sub-title">Sistem Rekonsiliasi Otomatisa Data Gate Tapping vs Manifest Penumpang</div>
                 </div>
             </div>
         """, unsafe_allow_html=True)
