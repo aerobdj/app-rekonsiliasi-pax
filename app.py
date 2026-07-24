@@ -192,17 +192,33 @@ if "reconcile_done" not in st.session_state:
 
 def clean_passenger_name(name):
     """
-    Pembersihan Gelar Penumpang (MR, MRS, MS, MSTR, MISS) dan Karakter Pengganggu
+    Pembersihan Gelar Penumpang (MR, MRS, MS, MSTR, MISS, SE, dll) dan Karakter Pengganggu.
+    Mendukung pembalikan nama dari LASTNAME,FIRSTNAME -> FIRSTNAME LASTNAME
     """
     if not name or name == "-":
         return ""
-    name = str(name).upper().replace("/", " ")
-    name = re.sub(r"([A-Z]+)(MR|MRS|MS|MSTR|MISS)\b", r"\1 ", name)
-    titles = [r"\bMR\b", r"\bMRS\b", r"\bMS\b", r"\bMSTR\b", r"\bMISS\b", r"\bMR\.\b", r"\bMRS\.\b", r"\bMS\.\b"]
+    name_str = str(name).upper().strip()
+    
+    # Menangani format LASTNAME,FIRSTNAME
+    if "," in name_str:
+        parts = name_str.split(",")
+        if len(parts) >= 2:
+            lname = parts[0].strip()
+            fname = parts[1].strip()
+            name_str = f"{fname} {lname}"
+
+    name_str = name_str.replace("/", " ")
+    name_str = re.sub(r"([A-Z]+)(MR|MRS|MS|MSTR|MISS)\b", r"\1 ", name_str)
+    
+    titles = [
+        r"\bMR\b", r"\bMRS\b", r"\bMS\b", r"\bMSTR\b", r"\bMISS\b", 
+        r"\bMR\.\b", r"\bMRS\.\b", r"\bMS\.\b", r"\bSE\b", r"\bST\b"
+    ]
     for t in titles:
-        name = re.sub(t, "", name)
-    name = re.sub(r"[^A-Z\s]", "", name)
-    return " ".join(name.split())
+        name_str = re.sub(t, "", name_str)
+        
+    name_str = re.sub(r"[^A-Z\s]", "", name_str)
+    return " ".join(name_str.split())
 
 def determine_pax_type(type_val, is_transit=False):
     """
@@ -267,6 +283,10 @@ def load_tapping_file(uploaded_file):
     else:
         st.error(f"⚠️ File **{uploaded_file.name}** tidak berhasil terbaca atau kosong.")
         return pd.DataFrame(), "-"
+
+# -----------------------------------------------------------------------------
+# PARSER 1: LION GROUP
+# -----------------------------------------------------------------------------
 
 def parse_manifest_lion_group(pdf_file):
     manifest_data = []
@@ -357,13 +377,126 @@ def parse_manifest_lion_group(pdf_file):
                     "seat_manifest": seat,
                     "pnr_manifest": tkt_no,
                     "type_manifest": type_pax_final,
+                    "section": "BOARDED",
                     "is_matched": False
                 })
 
     return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
 
 # -----------------------------------------------------------------------------
-# 3. RECONCILE ENGINE DENGAN PRESISI TINGGI & HANDLING SEAT INF
+# PARSER 2: CITILINK (QG)
+# -----------------------------------------------------------------------------
+
+def parse_manifest_citilink(pdf_file):
+    manifest_data = []
+    flight_no_mnf = "-"
+    flight_date_mnf = "-"
+    origin = "-"
+    destination = "-"
+    
+    full_text = ""
+    if hasattr(pdf_file, "name") and pdf_file.name.endswith(".txt"):
+        full_text = pdf_file.getvalue().decode("utf-8", errors="ignore")
+    else:
+        try:
+            with pdfplumber.open(pdf_file) as pdf:
+                for page in pdf.pages:
+                    text = page.extract_text()
+                    if text:
+                        full_text += text + "\n"
+        except Exception:
+            pdf_file.seek(0)
+            full_text = pdf_file.read().decode("utf-8", errors="ignore")
+
+    # Header Extraction Citilink
+    # Contoh: Flight: 487 BDJSUB Date: 22Jul26/1155
+    fl_match = re.search(r"Flight\s*[:\.-]?\s*(\d{3,4})\s+([A-Z]{6})", full_text, re.IGNORECASE)
+    if fl_match:
+        fl_num = fl_match.group(1).strip()
+        route_raw = fl_match.group(2).strip()
+        flight_no_mnf = f"QG {fl_num}"
+        if len(route_raw) == 6:
+            origin = route_raw[:3]
+            destination = route_raw[3:]
+    else:
+        fl_simple = re.search(r"Flight\s*[:\.-]?\s*(\d{3,4})", full_text, re.IGNORECASE)
+        if fl_simple:
+            flight_no_mnf = f"QG {fl_simple.group(1).strip()}"
+
+    date_match = re.search(r"Date\s*[:\.-]?\s*(\d{1,2}[A-Za-z]{3}\d{2})", full_text, re.IGNORECASE)
+    if date_match:
+        flight_date_mnf = date_match.group(1).upper()
+
+    flight_route_mnf = f"{origin}-{destination}" if origin != "-" and destination != "-" else "-"
+
+    # Parsing Line by Line Citilink
+    lines = full_text.split("\n")
+    current_section = "BOARDED"  # Default section
+    
+    for line in lines:
+        line_str = line.strip()
+        
+        # Penentuan Section
+        if "Checked-in/Boarded:" in line_str and "Thru" not in line_str:
+            current_section = "BOARDED"
+            continue
+        elif "No Shows:" in line_str and "Thru" not in line_str:
+            current_section = "NO_SHOW"
+            continue
+        elif "Thru Checked-in/Boarded" in line_str:
+            current_section = "THRU_BOARDED"
+            continue
+        elif "Thru No Shows" in line_str:
+            current_section = "THRU_NO_SHOW"
+            continue
+
+        # Parsing Baris Infant khusus Citilink: INFT: YUSRON,SHAQUIRA TSABINA
+        if "INFT:" in line_str:
+            infant_raw = line_str.replace("INFT:", "").strip()
+            clean_name = clean_passenger_name(infant_raw)
+            is_transit = (current_section in ["THRU_BOARDED", "THRU_NO_SHOW"])
+            pax_type = determine_pax_type("Infant", is_transit)
+            
+            if len(clean_name) > 2:
+                manifest_data.append({
+                    "raw_nama_manifest": infant_raw,
+                    "clean_nama_manifest": clean_name,
+                    "seat_manifest": "INF",
+                    "pnr_manifest": "NO_PNR_CITILINK",
+                    "type_manifest": pax_type,
+                    "section": current_section,
+                    "is_matched": False
+                })
+            continue
+
+        # Parsing Baris Penumpang Utama Citilink
+        # Contoh: 1 RIKI,MUHAMMAD VG5L4Z P 34 21JUL26 1E 0SUB 487
+        # Contoh Thru: 1 Abdullah,Dicky HF28ST L 89 30Jun26 29B 1SUB 771
+        match_pax = re.search(r"^\d+\s+([A-Za-z\s,\.-]+?)\s+([A-Z0-9]{6})\s+[A-Z]\s+\d+\s+\d+[A-Za-z]{3}\d{2}\s*([0-9]{1,2}[A-F])?", line_str)
+        if match_pax:
+            raw_name = match_pax.group(1).strip()
+            pnr_val = match_pax.group(2).strip()
+            seat_val = match_pax.group(3).strip() if match_pax.group(3) else "-"
+
+            clean_name = clean_passenger_name(raw_name)
+            is_transit = (current_section in ["THRU_BOARDED", "THRU_NO_SHOW"])
+            pax_type = determine_pax_type("Adult", is_transit)
+
+            if len(clean_name) > 2:
+                manifest_data.append({
+                    "raw_nama_manifest": raw_name,
+                    "clean_nama_manifest": clean_name,
+                    "seat_manifest": seat_val,
+                    "pnr_manifest": pnr_val,
+                    "type_manifest": pax_type,
+                    "section": current_section,
+                    "is_matched": False
+                })
+
+    return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
+
+# -----------------------------------------------------------------------------
+# 3. RECONCILE ENGINE DENGAN PRESISI TINGGI & HANDLING CITILINK CONFIRMATION
 # -----------------------------------------------------------------------------
 
 def reconcile_engine(df_tapping, df_manifest, airline_name):
@@ -379,6 +512,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
     no_counter = 1
     
     df_manifest["is_matched"] = False
+    is_citilink = "CITILINK" in airline_name.upper()
 
     for idx, tap in df_tapping.iterrows():
         tap_nama_raw = str(tap.get("NAME", tap.get("NAMA", tap.get("PASSENGER NAME", "")))).strip()
@@ -428,11 +562,16 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
             mnf_seat = match_row["seat_manifest"]
             mnf_pnr = match_row["pnr_manifest"]
             mnf_type = match_row["type_manifest"]
+            mnf_section = match_row.get("section", "BOARDED")
             
-            is_seat_same = (tap_seat == mnf_seat) or (tap_seat == "INF" and mnf_seat == "-")
+            is_seat_same = (tap_seat == mnf_seat) or (tap_seat == "INF" and mnf_seat == "INF") or (tap_seat == "INF" and mnf_seat == "-")
             pnr_note = " (PNR diganti No Ticket)" if len(mnf_pnr) > 6 else ""
 
-            if is_seat_same:
+            # Khusus Citilink: Cek apakah penumpang ada di daftar No Shows / Thru No Shows
+            if mnf_section in ["NO_SHOW", "THRU_NO_SHOW"]:
+                status = "🔴 OFFLOAD"
+                catatan = "Offload / No Show Manifest" if mnf_section == "NO_SHOW" else "Offload Transit"
+            elif is_seat_same:
                 status = "🟢 MATCH"
                 catatan = "Match Perfect" + pnr_note
             else:
@@ -453,10 +592,13 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
                 "CATATAN": catatan
             })
         else:
-            # KETENTUAN KHUSUS SEAT INF (INFANT)
+            # KETENTUAN KHUSUS SEAT INF (INFANT) ATAU CONFIRMATION CITILINK
             if tap_seat == "INF" or "INFANT" in tap_type_final.upper():
                 status = "👶 INFANT"
                 catatan = "Pax Infant"
+            elif is_citilink:
+                status = "🟨 CONFIRMATION"
+                catatan = "Confirmation required"
             else:
                 status = "🔴 OFFLOAD"
                 catatan = "Offload / Not in Manifest"
@@ -479,6 +621,9 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
     # TAMBAHKAN PENUMPANG MANIFEST YANG BELUM DI-SCAN (NOT SCAN)
     unscanned_manifest = df_manifest[~df_manifest["is_matched"]]
     for m_idx, mnf in unscanned_manifest.iterrows():
+        mnf_sec = mnf.get("section", "BOARDED")
+        cat_not_scan = "Passenger No Show and did not scan" if mnf_sec in ["NO_SHOW", "THRU_NO_SHOW"] else "Not Scanned / Ghost Pax"
+        
         results.append({
             "NO": no_counter,
             "NAMA SCAN": "-",
@@ -490,7 +635,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
             "PNR MANIFEST": mnf["pnr_manifest"],
             "TYPE MANIFEST": mnf["type_manifest"],
             "HASIL": "⚪ NOT SCAN",
-            "CATATAN": "Not Scanned / Ghost Pax"
+            "CATATAN": cat_not_scan
         })
         no_counter += 1
 
@@ -577,7 +722,9 @@ if menu == "📊 Rekonsiliasi Data":
                 df_tapping = df_tap1
                 flight_scan2 = "-"
             
-            if "LION" in airline.upper():
+            if "CITILINK" in airline.upper() or "QG" in airline.upper():
+                df_manifest, flight_no_mnf, flight_date_mnf, flight_route_mnf = parse_manifest_citilink(file_manifest)
+            elif "LION" in airline.upper():
                 df_manifest, flight_no_mnf, flight_date_mnf, flight_route_mnf = parse_manifest_lion_group(file_manifest)
             else:
                 df_manifest, flight_no_mnf, flight_date_mnf, flight_route_mnf = parse_manifest_lion_group(file_manifest)
@@ -623,8 +770,9 @@ if menu == "📊 Rekonsiliasi Data":
                 cnt_seat_conflict = len(df_result[df_result["HASIL"].str.contains("SEAT CONFLICT")])
                 cnt_not_scan = len(df_result[df_result["HASIL"].str.contains("NOT SCAN")])
                 cnt_infant = len(df_result[df_result["HASIL"].str.contains("INFANT")])
+                cnt_confirm = len(df_result[df_result["HASIL"].str.contains("CONFIRMATION")])
 
-                r_col1, r_col2, r_col3, r_col4, r_col5, r_col6, r_col7 = st.columns(7)
+                r_col1, r_col2, r_col3, r_col4, r_col5, r_col6, r_col7, r_col8 = st.columns(8)
                 with r_col1:
                     st.markdown(f'<div class="custom-card" style="border-left-color: #38bdf8;"><div class="custom-card-label">📊 Pax Scan</div><div class="custom-card-value">{cnt_scan} Pax</div></div>', unsafe_allow_html=True)
                 with r_col2:
@@ -644,6 +792,9 @@ if menu == "📊 Rekonsiliasi Data":
                     st.rerun()
                 if r_col7.button(f"👶 INFANT\n\n{cnt_infant} Pax", use_container_width=True):
                     st.session_state["filter_status"] = "INFANT"
+                    st.rerun()
+                if r_col8.button(f"🟨 CONFIRM\n\n{cnt_confirm} Pax", use_container_width=True):
+                    st.session_state["filter_status"] = "CONFIRMATION"
                     st.rerun()
 
                 st.write("")
