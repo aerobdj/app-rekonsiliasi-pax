@@ -444,7 +444,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
             mnf_type = match_row["type_manifest"]
             
             is_seat_same = (tap_seat == mnf_seat) or (tap_seat == "INF" and mnf_seat == "-")
-            pnr_note = " (Match via No Ticket)" if len(mnf_pnr) > 6 else ""
+            pnr_note = " (PNR replaced by Ticket Number)" if len(mnf_pnr) > 6 else ""
 
             if is_seat_same:
                 status = "🟢 MATCH"
