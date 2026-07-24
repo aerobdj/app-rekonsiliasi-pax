@@ -199,7 +199,6 @@ def clean_passenger_name(name):
         return ""
     name_str = str(name).upper().strip()
     
-    # Menangani format LASTNAME,FIRSTNAME
     if "," in name_str:
         parts = name_str.split(",")
         if len(parts) >= 2:
@@ -408,8 +407,6 @@ def parse_manifest_citilink(pdf_file):
             pdf_file.seek(0)
             full_text = pdf_file.read().decode("utf-8", errors="ignore")
 
-    # Header Extraction Citilink
-    # Contoh: Flight: 487 BDJSUB Date: 22Jul26/1155
     fl_match = re.search(r"Flight\s*[:\.-]?\s*(\d{3,4})\s+([A-Z]{6})", full_text, re.IGNORECASE)
     if fl_match:
         fl_num = fl_match.group(1).strip()
@@ -429,14 +426,12 @@ def parse_manifest_citilink(pdf_file):
 
     flight_route_mnf = f"{origin}-{destination}" if origin != "-" and destination != "-" else "-"
 
-    # Parsing Line by Line Citilink
     lines = full_text.split("\n")
-    current_section = "BOARDED"  # Default section
+    current_section = "BOARDED"
     
     for line in lines:
         line_str = line.strip()
         
-        # Penentuan Section
         if "Checked-in/Boarded:" in line_str and "Thru" not in line_str:
             current_section = "BOARDED"
             continue
@@ -450,7 +445,6 @@ def parse_manifest_citilink(pdf_file):
             current_section = "THRU_NO_SHOW"
             continue
 
-        # Parsing Baris Infant khusus Citilink: INFT: YUSRON,SHAQUIRA TSABINA
         if "INFT:" in line_str:
             infant_raw = line_str.replace("INFT:", "").strip()
             clean_name = clean_passenger_name(infant_raw)
@@ -469,9 +463,6 @@ def parse_manifest_citilink(pdf_file):
                 })
             continue
 
-        # Parsing Baris Penumpang Utama Citilink
-        # Contoh: 1 RIKI,MUHAMMAD VG5L4Z P 34 21JUL26 1E 0SUB 487
-        # Contoh Thru: 1 Abdullah,Dicky HF28ST L 89 30Jun26 29B 1SUB 771
         match_pax = re.search(r"^\d+\s+([A-Za-z\s,\.-]+?)\s+([A-Z0-9]{6})\s+[A-Z]\s+\d+\s+\d+[A-Za-z]{3}\d{2}\s*([0-9]{1,2}[A-F])?", line_str)
         if match_pax:
             raw_name = match_pax.group(1).strip()
@@ -496,7 +487,7 @@ def parse_manifest_citilink(pdf_file):
     return pd.DataFrame(manifest_data), flight_no_mnf, flight_date_mnf, flight_route_mnf
 
 # -----------------------------------------------------------------------------
-# 3. RECONCILE ENGINE DENGAN PRESISI TINGGI & HANDLING CITILINK CONFIRMATION
+# 3. RECONCILE ENGINE DENGAN ATURAN CERDAS (PNR MATCH & SEAT COMPACT MATCH)
 # -----------------------------------------------------------------------------
 
 def reconcile_engine(df_tapping, df_manifest, airline_name):
@@ -525,6 +516,7 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
         is_transit = "TRANSIT" in raw_cat.upper() or "TRANSIT" in raw_type.upper()
         tap_type_final = determine_pax_type(raw_type, is_transit)
         tap_nama_clean = clean_passenger_name(tap_nama_raw)
+        tap_nama_no_space = tap_nama_clean.replace(" ", "")
         
         status = ""
         catatan = ""
@@ -532,23 +524,41 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
         
         available_manifest = df_manifest[~df_manifest["is_matched"]]
         
-        # STRATEGI 1: Match Presisi via SEAT SAMA + FUZZY NAMA (Min. 70% Kemiripan)
-        if tap_seat != "-" and tap_seat != "INF" and not available_manifest.empty:
+        # STRATEGI 1: MATCH PNR EKSAK (JIKA PNR VALID > 4 KARAKTER)
+        if len(tap_pnr) >= 5 and tap_pnr != "NO_PNR_CITILINK" and not available_manifest.empty:
+            pnr_match = available_manifest[available_manifest["pnr_manifest"] == tap_pnr]
+            if not pnr_match.empty:
+                matched_idx = pnr_match.index[0]
+
+        # STRATEGI 2: SEAT SAMA + FUZZY COMPACT NAME (Mencegah potong nama)
+        if matched_idx is None and tap_seat != "-" and tap_seat != "INF" and not available_manifest.empty:
             same_seat_rows = available_manifest[available_manifest["seat_manifest"] == tap_seat]
             for m_idx, m_row in same_seat_rows.iterrows():
-                score = fuzz.token_set_ratio(tap_nama_clean, m_row["clean_nama_manifest"])
-                if score >= 70:
+                m_clean = m_row["clean_nama_manifest"]
+                m_no_space = m_clean.replace(" ", "")
+                
+                # Cek Skor Token Set dan Compact Substring Match
+                score = fuzz.token_set_ratio(tap_nama_clean, m_clean)
+                score_no_space = fuzz.ratio(tap_nama_no_space, m_no_space)
+                
+                if score >= 50 or score_no_space >= 50 or (tap_nama_no_space in m_no_space) or (m_no_space in tap_nama_no_space):
                     matched_idx = m_idx
                     break
-        
-        # STRATEGI 2: Fuzzy Name Match Keseluruhan (Minimal 72% Kemiripan)
+
+        # STRATEGI 3: FUZZY NAME MATCH GENERAL (Minimal 55% jika nama berdempetan)
         if matched_idx is None and not available_manifest.empty:
             best_score = 0
             best_m_idx = None
             for m_idx, m_row in available_manifest.iterrows():
-                score = fuzz.token_set_ratio(tap_nama_clean, m_row["clean_nama_manifest"])
-                if score > best_score and score >= 72:
-                    best_score = score
+                m_clean = m_row["clean_nama_manifest"]
+                m_no_space = m_clean.replace(" ", "")
+                
+                score1 = fuzz.token_set_ratio(tap_nama_clean, m_clean)
+                score2 = fuzz.ratio(tap_nama_no_space, m_no_space)
+                max_s = max(score1, score2)
+                
+                if max_s > best_score and max_s >= 55:
+                    best_score = max_s
                     best_m_idx = m_idx
             if best_m_idx is not None:
                 matched_idx = best_m_idx
@@ -564,10 +574,9 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
             mnf_type = match_row["type_manifest"]
             mnf_section = match_row.get("section", "BOARDED")
             
-            is_seat_same = (tap_seat == mnf_seat) or (tap_seat == "INF" and mnf_seat == "INF") or (tap_seat == "INF" and mnf_seat == "-")
+            is_seat_same = (tap_seat == mnf_seat) or (tap_seat == "INF" and mnf_seat in ["INF", "-"])
             pnr_note = " (PNR diganti No Ticket)" if len(mnf_pnr) > 6 else ""
 
-            # Khusus Citilink: Cek apakah penumpang ada di daftar No Shows / Thru No Shows
             if mnf_section in ["NO_SHOW", "THRU_NO_SHOW"]:
                 status = "🔴 OFFLOAD"
                 catatan = "Offload / No Show Manifest" if mnf_section == "NO_SHOW" else "Offload Transit"
@@ -592,7 +601,6 @@ def reconcile_engine(df_tapping, df_manifest, airline_name):
                 "CATATAN": catatan
             })
         else:
-            # KETENTUAN KHUSUS SEAT INF (INFANT) ATAU CONFIRMATION CITILINK
             if tap_seat == "INF" or "INFANT" in tap_type_final.upper():
                 status = "👶 INFANT"
                 catatan = "Pax Infant"
